@@ -172,7 +172,7 @@ flowchart LR
 ## 📦 仓库结构
 
 ```text
-2025-sentry-navi/
+ds_nav/
 ├── src/
 │   ├── decision/
 │   │   └── bt_manager/              # 行为树、比赛策略、blackboard
@@ -282,9 +282,9 @@ sudo make install
 ### 5. 获取仓库并构建
 
 ```bash
-git clone --branch rog_map_work --single-branch \
-  https://github.com/Walker152/navi_minco_bit.git ~/2025-sentry-navi
-cd ~/2025-sentry-navi
+git clone --branch main --single-branch \
+  https://github.com/zhefu-666/ds_nav.git ~/ds_nav
+cd ~/ds_nav
 export ROS_DISTRO="${ROS_DISTRO:-humble}"
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 ./build.bash
@@ -298,7 +298,7 @@ MEM_LIMIT_GB=24 MEM_PER_WORKER_GB=2 ./build.bash
 ```
 
 > [!WARNING]
-> `start.bash` 当前固定执行 `cd ~/2025-sentry-navi`，若工作空间位于其他目录，请先修改该行。脚本还会打开多个 GNOME Terminal、启动 PTP sudo 命令并自动录制 rosbag，更适合实车桌面环境，不适合无界面服务器。
+> `start.bash` 当前固定执行 `cd ~/ds_nav`，若工作空间位于其他目录，请先修改该行。脚本还会打开多个 GNOME Terminal、启动 PTP sudo 命令并自动录制 rosbag，更适合实车桌面环境，不适合无界面服务器。
 
 ## ⚙️ 上车前关键配置
 
@@ -480,7 +480,7 @@ scan_z_max_abs ≈ h_max - h_lidar
 每个终端都先执行：
 
 ```bash
-cd ~/2025-sentry-navi
+cd ~/ds_nav
 export ROS_DISTRO="${ROS_DISTRO:-humble}"
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 source install/setup.bash
@@ -757,7 +757,7 @@ ros2 topic hz /cmd_vel_mpc
 <details>
 <summary><b>启动脚本找不到工作空间或无法在 SSH 中运行</b></summary>
 
-`start.bash` 固定进入 `~/2025-sentry-navi` 并依赖 `gnome-terminal`。修改工作空间路径，或按“分模块启动”在当前 shell / tmux 中运行各 launch。
+`start.bash` 固定进入 `~/ds_nav` 并依赖 `gnome-terminal`。修改工作空间路径，或按“分模块启动”在当前 shell / tmux 中运行各 launch。
 
 </details>
 

@@ -39,3 +39,15 @@ test/
 tests/
 test_*
 *_test.*
+
+# ROS 2 / Gazebo 运行产物
+*.bag
+*.bag.active
+*.db3
+*.mcap
+.ros/
+.colcon/
+gazebo/
+gz_log/
+*.sdf.bak
+*.world.bak

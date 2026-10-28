@@ -1,5 +1,5 @@
 #!/bin/bash
-cd ~/2025-sentry-navi
+cd ~/ds_nav
 source ./install/setup.bash
 
 gnome-terminal -- bash -c "ros2 launch livox_ros_driver2 msg_mixed_MID360.launch.py; exec bash"
