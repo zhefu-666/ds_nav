@@ -1,0 +1,92 @@
+<?xml version="1.0"?>
+<sdf version="1.7">
+
+  <!-- xmacro_define_block: horizon -->
+  <xmacro_define_block name="horizon" params="prefix parent pose update_rate samples visualize min_range max_range">
+    <joint name="${prefix}horizon_joint" type="fixed">
+      <pose relative_to="${parent}">${pose}</pose>
+      <parent>${parent}</parent>
+      <child>${prefix}horizon_link</child>
+    </joint>
+
+    <link name="${prefix}horizon_link">
+      <pose relative_to="${prefix}horizon_joint">0.0 0.0 0.0 0 0 0</pose>
+      <inertial>
+        <pose>0 0 0.02 0 0 0</pose>
+        <xmacro_block name="inertia_cylinder" m="0.02" r="0.03" l="0.08" />
+      </inertial>
+
+      <!-- visual uses external DAE mesh (place horizon.dae at resource/models/horizon/meshes/horizon.dae) -->
+      <visual name="visual">
+        <pose>0.0 0.0 0.0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://horizon/meshes/horizon.dae</uri>
+            <scale>0.01 0.01 0.01</scale>
+          </mesh>
+        </geometry>
+      </visual>
+
+      <!-- simple collision for performance -->
+      <collision name="collision">
+        <pose>0.0 0.0 0.0 0 0 0</pose>
+        <xmacro_block name="geometry_cylinder" r="0.00002" l="0.00005" />
+      </collision>
+
+      <!-- IMU for the horizon module (参考 mid360 的 imu 配置) -->
+      <sensor name="${prefix}horizon_imu" type="imu">
+        <ignition_frame_id>${prefix}horizon_link</ignition_frame_id>
+        <always_on>1</always_on>
+        <update_rate>200</update_rate>
+        <visualize>true</visualize>
+      </sensor>
+
+      <!-- horizontal lidar -->
+      <sensor name="${prefix}horizon_lidar" type="gpu_lidar">
+        <ignition_frame_id>${prefix}horizon_link</ignition_frame_id>
+        <pose>0 0 0.04 0 0 0</pose>
+        <always_on>true</always_on>
+        <visualize>${visualize}</visualize>
+        <update_rate>${update_rate}</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>${samples}</samples>
+              <resolution>1.0</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>6.2831852</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>${min_range}</min>
+            <max>${max_range}</max>
+          </range>
+        </ray>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </sensor>
+    </link>
+  </xmacro_define_block>
+
+  <!-- simple horizon model wrapper for testing -->
+  <model name="simple_horizon">
+    <pose>0 0 0.05 0 0 0</pose>
+    <link name="base_link">
+      <inertial>
+        <xmacro_block name="inertia_box" m="0.4" x="0.4" y="0.4" z="0.4" />
+      </inertial>
+      <visual name="visual">
+        <xmacro_block name="geometry_box" x="0.4" y="0.4" z="0.4" />
+      </visual>
+      <collision name="collision">
+        <xmacro_block name="geometry_box" x="0.4" y="0.4" z="0.4" />
+      </collision>
+    </link>
+    <!-- default: 10 Hz, 1440 samples, 0.1-30m -->
+    <xmacro_block name="horizon" prefix="simple_" parent="base_link" pose="0 0 0.05 0 0 0"
+      update_rate="10" samples="1440" visualize="true" min_range="0.1" max_range="30.0"/>
+  </model>
+</sdf>

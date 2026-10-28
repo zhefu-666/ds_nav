@@ -1,0 +1,67 @@
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <model name="horizon">
+    <pose>0 0 0 0 0 0</pose>
+    <link name="horizon_link">
+      <pose>0 0 0 0 0 0</pose>
+      <inertial>
+        <mass>0.02</mass>
+        <inertia>
+          <ixx>0.0005</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.0005</iyy>
+          <iyz>0</iyz>
+          <izz>0.0008</izz>
+        </inertia>
+      </inertial>
+      <visual name="visual">
+        <geometry>
+          <mesh>
+            <uri>model://horizon/meshes/horizon.dae</uri>
+            <scale>0.01 0.01 0.01</scale>
+          </mesh>
+        </geometry>
+      </visual>
+      <collision name="collision">
+        <geometry>
+          <cylinder>
+            <radius>0.02</radius>
+            <length>0.05</length>
+          </cylinder>
+        </geometry>
+      </collision>
+
+      <sensor name="horizon_imu" type="imu">
+        <always_on>1</always_on>
+        <update_rate>200</update_rate>
+        <visualize>true</visualize>
+        <imu>
+          <topic>horizon/imu</topic>
+        </imu>
+      </sensor>
+
+      <sensor name="horizon_lidar" type="gpu_lidar">
+        <pose>0 0 0.04 0 0 0</pose>
+        <always_on>true</always_on>
+        <visualize>true</visualize>
+        <update_rate>10</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>1440</samples>
+              <resolution>1.0</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>6.2831852</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>30.0</max>
+          </range>
+        </ray>
+      </sensor>
+
+    </link>
+  </model>
+</sdf>

@@ -11,8 +11,25 @@ find_package(rclcpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
-add_executable(planner_node src/planner_node.cpp)
+add_executable(planner_node
+  src/planner_node.cpp
+  src/astar.cpp
+)
+
+add_executable(demo_map_server
+  src/demo_map_server.cpp
+)
+
+add_executable(static_map_server
+  src/static_map_server.cpp
+)
+
+target_include_directories(planner_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
 
 ament_target_dependencies(planner_node
   rclcpp
@@ -21,8 +38,21 @@ ament_target_dependencies(planner_node
   visualization_msgs
 )
 
+ament_target_dependencies(demo_map_server
+  rclcpp
+  nav_msgs
+)
+
+ament_target_dependencies(static_map_server
+  rclcpp
+  nav_msgs
+)
+target_link_libraries(static_map_server yaml-cpp)
+
 install(TARGETS
   planner_node
+  demo_map_server
+  static_map_server
   DESTINATION lib/${PROJECT_NAME}
 )
 
