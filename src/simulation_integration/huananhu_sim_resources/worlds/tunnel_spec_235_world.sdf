@@ -1,0 +1,137 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.7">
+  <world name="default">
+    <plugin filename="libignition-gazebo-physics-system.so" name="ignition::gazebo::systems::Physics">
+    </plugin>
+    <plugin filename="libignition-gazebo-scene-broadcaster-system.so" name="ignition::gazebo::systems::SceneBroadcaster">
+    </plugin>
+    <plugin filename="libignition-gazebo-user-commands-system.so" name="ignition::gazebo::systems::UserCommands">
+    </plugin>
+    <plugin filename="libignition-gazebo-sensors-system.so" name="ignition::gazebo::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="libignition-gazebo-imu-system.so" name="ignition::gazebo::systems::Imu">
+    </plugin>
+    <light type="directional" name="direct_light">
+      <visualize>false</visualize>
+      <cast_shadows>true</cast_shadows>
+      <pose>7.4 3.6 10 0 0 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+      <specular>0.7 0.7 0.7 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>0 0 -1</direction>
+    </light>
+    <light type="directional" name="rim_light">
+      <visualize>false</visualize>
+      <cast_shadows>true</cast_shadows>
+      <pose>-8 -8 8 0.1 0.2 0</pose>
+      <diffuse>0.6 0.6 0.6 1</diffuse>
+      <specular>0.6 0.6 0.6 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.02</linear>
+        <quadratic>0.002</quadratic>
+      </attenuation>
+      <direction>0.35 0.25 -1</direction>
+    </light>
+    <scene>
+      <ambient>0.65 0.65 0.65 1</ambient>
+      <background>0.18 0.21 0.25 1</background>
+    </scene>
+    <light type="directional" name="underside_fill">
+      <pose>0 0 -3 0 0 0</pose>
+      <direction>0.2 0.1 1</direction>
+      <diffuse>0.7 0.7 0.7 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <cast_shadows>false</cast_shadows>
+    </light>
+    <plugin filename="ignition-gazebo-contact-system" name="ignition::gazebo::systems::Contact" />
+    <model name="explicit_floor">
+      <static>true</static>
+      <pose>0 1 .07 0 0 0</pose>
+      <link name="floor">
+        <collision name="floor_collision">
+          <geometry>
+            <box>
+              <size>12.6 8.6 .02</size>
+            </box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+    <model name="drawing_tunnel_fixture">
+      <static>true</static>
+      <link name="structure">
+        <collision name="roof">
+          <pose>-1.4700000000000002 0 0.325 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>4.06 0.8400000000000001 0.02</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="roof">
+          <pose>-1.4700000000000002 0 0.325 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>4.06 0.8400000000000001 0.02</size>
+            </box>
+          </geometry>
+          <visibility_flags>2</visibility_flags>
+          <material>
+            <ambient>.55 .65 .75 1</ambient>
+            <diffuse>.55 .65 .75 1</diffuse>
+          </material>
+        </visual>
+        <collision name="south_wall">
+          <pose>-1.4700000000000002 -0.41000000000000003 0.1975 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>4.06 0.02 0.235</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="south_wall">
+          <pose>-1.4700000000000002 -0.41000000000000003 0.1975 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>4.06 0.02 0.235</size>
+            </box>
+          </geometry>
+          <visibility_flags>2</visibility_flags>
+          <material>
+            <ambient>.55 .65 .75 1</ambient>
+            <diffuse>.55 .65 .75 1</diffuse>
+          </material>
+        </visual>
+        <collision name="north_wall">
+          <pose>-1.4700000000000002 0.41000000000000003 0.1975 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>4.06 0.02 0.235</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="north_wall">
+          <pose>-1.4700000000000002 0.41000000000000003 0.1975 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>4.06 0.02 0.235</size>
+            </box>
+          </geometry>
+          <visibility_flags>2</visibility_flags>
+          <material>
+            <ambient>.55 .65 .75 1</ambient>
+            <diffuse>.55 .65 .75 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+  </world>
+</sdf>

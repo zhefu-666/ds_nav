@@ -50,7 +50,7 @@ void SmacPlanner2DSimple::setMap(const std::shared_ptr<rog_map::MapQueryInterfac
   costmap_resolution_ = map_->resolution();
   size_x_ = map_->sizeX();
   size_y_ = map_->sizeY();
-  planning_id_ = 0u;
+  // Preserve the search epoch: visited_/closed_ retain tags on same-sized maps.
   ensureSearchBuffers();
   std::fill(esdf_cost_cache_id_.begin(), esdf_cost_cache_id_.end(), 0u);
   std::fill(esdf_distance_cache_id_.begin(), esdf_distance_cache_id_.end(), 0u);
@@ -60,7 +60,6 @@ void SmacPlanner2DSimple::setESDFQuery(
   const std::shared_ptr<rog_map::MapQueryInterface> & query)
 {
   esdf_query_ = query;
-  planning_id_ = 0u;
   std::fill(esdf_cost_cache_id_.begin(), esdf_cost_cache_id_.end(), 0u);
   std::fill(esdf_distance_cache_id_.begin(), esdf_distance_cache_id_.end(), 0u);
 }
@@ -68,7 +67,6 @@ void SmacPlanner2DSimple::setESDFQuery(
 void SmacPlanner2DSimple::setCollisionDistance(double collision_distance)
 {
   collision_distance_ = std::max(0.0, collision_distance);
-  planning_id_ = 0u;
   std::fill(esdf_cost_cache_id_.begin(), esdf_cost_cache_id_.end(), 0u);
   std::fill(esdf_distance_cache_id_.begin(), esdf_distance_cache_id_.end(), 0u);
 }

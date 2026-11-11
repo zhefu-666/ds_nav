@@ -1,0 +1,119 @@
+# ros_gz_bridge configuration. <robot_name> is replaced by the spawn launch.
+# GZ -> ROS truth channels are diagnostic only; no navigation node may consume
+# /sim/ground_truth_odometry.
+- direction: ROS_TO_GZ
+  gz_topic_name: /<robot_name>/cmd_vel
+  gz_type_name: ignition.msgs.Twist
+  ros_topic_name: /sim/actuator_cmd_vel
+  ros_type_name: geometry_msgs/msg/Twist
+
+- direction: GZ_TO_ROS
+  gz_topic_name: /<robot_name>/odometry
+  gz_type_name: ignition.msgs.Odometry
+  ros_topic_name: /sim/ground_truth_odometry
+  ros_type_name: nav_msgs/msg/Odometry
+
+- direction: GZ_TO_ROS
+  gz_topic_name: /world/default/model/<robot_name>/joint_state
+  gz_type_name: ignition.msgs.Model
+  ros_topic_name: /joint_states
+  ros_type_name: sensor_msgs/msg/JointState
+
+- direction: GZ_TO_ROS
+  gz_topic_name: /world/default/model/<robot_name>/link/chassis/sensor/front_rplidar_a2/scan
+  gz_type_name: ignition.msgs.LaserScan
+  ros_topic_name: /scan
+  ros_type_name: sensor_msgs/msg/LaserScan
+
+- direction: GZ_TO_ROS
+  gz_topic_name: /world/default/model/<robot_name>/link/<sensor_parent>/sensor/chassis_imu/imu
+  gz_type_name: ignition.msgs.IMU
+  ros_topic_name: /livox/imu
+  ros_type_name: sensor_msgs/msg/Imu
+
+- direction: GZ_TO_ROS
+  gz_topic_name: /world/default/model/<robot_name>/link/<sensor_parent>/sensor/navigation_lidar3d/scan/points
+  gz_type_name: ignition.msgs.PointCloudPacked
+  ros_topic_name: /lidar/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+
+- direction: GZ_TO_ROS
+  gz_topic_name: /assessment/body_contacts
+  gz_type_name: ignition.msgs.Contacts
+  ros_topic_name: /assessment/body_contacts
+  ros_type_name: ros_gz_interfaces/msg/Contacts
+
+# Diagnostic only: passive-roller hub encoders from WheelTractionDrive (rollers mode).
+- direction: GZ_TO_ROS
+  gz_topic_name: /<robot_name>/wheel_odometry
+  gz_type_name: ignition.msgs.Odometry
+  ros_topic_name: /sim/wheel_odometry
+  ros_type_name: nav_msgs/msg/Odometry
+
+# CAD joint position commands. The controllers inside models/huananhu_demo
+# hard-code the /huananhu prefix, so these only match robot_name=huananhu.
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/yaw1_joint
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/yaw1_joint
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/yaw2_joint
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/yaw2_joint
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/pitch1_drive_joint
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/pitch1_drive_joint
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/pitch1_rocker_joint
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/pitch1_rocker_joint
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/pitch1_coupler_joint
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/pitch1_coupler_joint
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/uwb_level_joint
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/uwb_level_joint
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/pitch2_joint
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/pitch2_joint
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/yaw1_motor_joint
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/yaw1_motor_joint
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/yaw2_motor_joint
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/yaw2_motor_joint
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/gas_1_hinge
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/gas_1_hinge
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/gas_1_slide
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/gas_1_slide
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/gas_2_hinge
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/gas_2_hinge
+  ros_type_name: std_msgs/msg/Float64
+- direction: ROS_TO_GZ
+  gz_topic_name: /huananhu/position/gas_2_slide
+  gz_type_name: ignition.msgs.Double
+  ros_topic_name: /huananhu/position/gas_2_slide
+  ros_type_name: std_msgs/msg/Float64

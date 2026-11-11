@@ -1,0 +1,14 @@
+# RMUL 2027 simulation spawn contract.
+# Field pose stays [-0, 1, 0.5, pi, 0, 0] exactly as in the source world.
+# huananhu z stays 0.08 as in the source spawn_robots.launch.py: the composed
+# CAD undercarriage rests at that height, so the model settles immediately
+# instead of dropping 0.22 m and disturbing the static LIO initialization.
+world: rmul_2027
+robots:
+  rmul_2027:
+    - name: huananhu
+      color: red
+      x_pose: "-5.0"
+      y_pose: "0.0"
+      z_pose: "0.08"
+      yaw: "0.0"

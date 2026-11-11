@@ -1,0 +1,108 @@
+<?xml version="1.0"?>
+<!--
+  RMUL 2027 low-profile carrier description for robot_state_publisher.
+  It mirrors models/low_profile_robot/model.sdf exactly:
+    base_footprint -> chassis (0,0,0.10), wheels, and the sensor frames
+    body (IMU, at chassis origin), front_laser and navigation_laser.
+  Only fixed joints exist, so robot_state_publisher publishes static TF.
+-->
+<robot name="low_profile_carrier">
+  <link name="base_footprint"/>
+
+  <link name="chassis">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.48 0.38 0.10"/>
+      </geometry>
+      <material name="chassis_red">
+        <color rgba="0.8 0.15 0.15 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="base_to_chassis" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="chassis"/>
+    <origin xyz="0 0 0.10" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Sensor measurement frames. The IMU sits at the chassis origin and is
+       named body, matching Point-LIO's IMU-body convention. -->
+  <link name="body"/>
+  <joint name="chassis_to_body" type="fixed">
+    <parent link="chassis"/>
+    <child link="body"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="front_laser"/>
+  <joint name="chassis_to_front_laser" type="fixed">
+    <parent link="chassis"/>
+    <child link="front_laser"/>
+    <origin xyz="0.15 0 0.065" rpy="0 0 0"/>
+  </joint>
+
+  <link name="navigation_laser"/>
+  <joint name="chassis_to_navigation_laser" type="fixed">
+    <parent link="chassis"/>
+    <child link="navigation_laser"/>
+    <origin xyz="0.15 0 0.065" rpy="0 0 0"/>
+  </joint>
+
+  <link name="front_left_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.035"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="front_left_wheel_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="front_left_wheel"/>
+    <origin xyz="0.18 0.15 -0.065" rpy="0 0 0"/>
+  </joint>
+
+  <link name="front_right_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.035"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="front_right_wheel_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="front_right_wheel"/>
+    <origin xyz="0.18 -0.15 -0.065" rpy="0 0 0"/>
+  </joint>
+
+  <link name="rear_left_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.035"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="rear_left_wheel_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="rear_left_wheel"/>
+    <origin xyz="-0.18 0.15 -0.065" rpy="0 0 0"/>
+  </joint>
+
+  <link name="rear_right_wheel">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.035"/>
+      </geometry>
+    </visual>
+  </link>
+  <joint name="rear_right_wheel_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="rear_right_wheel"/>
+    <origin xyz="-0.18 -0.15 -0.065" rpy="0 0 0"/>
+  </joint>
+</robot>

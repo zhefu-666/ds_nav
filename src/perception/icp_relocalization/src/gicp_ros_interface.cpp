@@ -34,6 +34,7 @@ GicpRosInterface::GicpRosInterface(const rclcpp::NodeOptions & options)
   source_cloud_topic_ = this->declare_parameter<std::string>("source_cloud_topic", "/livox/stdpc");
   alignment_frequency_ = this->declare_parameter<double>("alignment_frequency", 1.0);
   tf_publish_frequency_ = this->declare_parameter<double>("tf_publish_frequency", 10.0);
+  publish_3d_pose_ = this->declare_parameter<bool>("publish_3d_pose", false);
   accumulate_frames_ = this->declare_parameter<int>("accumulate_frames", 5);
   score_threshold_ = this->declare_parameter<double>("gicp.score_threshold", -1.0);
   normalized_score_threshold_ = this->declare_parameter<double>("gicp.normalized_score_threshold", 0.1);
@@ -59,6 +60,7 @@ GicpRosInterface::GicpRosInterface(const rclcpp::NodeOptions & options)
   results_recording_enabled_ = this->declare_parameter<bool>("results.enable", false);
   results_path_ =
     this->declare_parameter<std::string>("results.path", "/tmp/gicp_relocalization_results.csv");
+  this->declare_parameter<bool>("recall_use_parameter_seed", false);
   enable_continuous_relocalization_ =
     this->declare_parameter<bool>("enable_continuous_relocalization", false);
   max_tracking_lost_count_ = this->declare_parameter<int>("max_tracking_lost_count", 3);
@@ -251,6 +253,12 @@ GicpRosInterface::GicpRosInterface(const rclcpp::NodeOptions & options)
 
   initializeDebugPublishers();
 
+  // Minimal observable localization state for downstream consumers (simulation
+  // gate, diagnostics). Only a real stability-accepted convergence reports
+  // "localized"; the timeout default pose is reported separately and must not
+  // be treated as a successful localization.
+  localization_state_pub_ = this->create_publisher<std_msgs::msg::String>("~/localization_state", 10);
+
   setupGicp(target_pcd_file);
 
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
@@ -346,6 +354,8 @@ void GicpRosInterface::startTfPublishTimer()
 
 void GicpRosInterface::tfPublishTimerCallback()
 {
+  publishLocalizationState();
+
   Eigen::Matrix4f pose_snapshot = Eigen::Matrix4f::Identity();
   {
     std::lock_guard<std::mutex> lock(pose_mtx_);
@@ -354,7 +364,42 @@ void GicpRosInterface::tfPublishTimerCallback()
     }
     pose_snapshot = map_to_camera_init_;
   }
-  gicp_utils::publishCurrentTransform(tf_broadcaster_, map_frame_, pose_snapshot, this->now());
+  gicp_utils::publishCurrentTransform(
+      tf_broadcaster_, map_frame_, pose_snapshot, this->now(), publish_3d_pose_);
+}
+
+void GicpRosInterface::publishLocalizationState()
+{
+  if (!localization_state_pub_) {
+    return;
+  }
+
+  std::string state_name;
+  if (timeout_fallback_) {
+    state_name = "timeout_default_pose";
+  } else {
+    switch (state_) {
+    case State::UNINITIALIZED:
+      state_name = "uninitialized";
+      break;
+    case State::INITIALIZING:
+      state_name = "initializing";
+      break;
+    case State::CONVERGING:
+      state_name = "converging";
+      break;
+    case State::LOCALIZED:
+      state_name = has_localized_once_ ? "localized" : "converging";
+      break;
+    default:
+      state_name = "unknown";
+      break;
+    }
+  }
+
+  std_msgs::msg::String msg;
+  msg.data = state_name;
+  localization_state_pub_->publish(msg);
 }
 
 void GicpRosInterface::relocalizeServiceCallback(
@@ -365,14 +410,29 @@ void GicpRosInterface::relocalizeServiceCallback(
   std::cout << color_text::BLUE << "[GICP] Received request to re-trigger relocalization."
             << color_text::RESET << std::endl;
 
+  // Opt-in simulation recall: read a sensor-derived seed set through the
+  // existing parameter API. Competition recall keeps its multi-guess default.
+  const bool seeded = this->get_parameter("recall_use_parameter_seed").as_bool();
+  if (seeded) {
+    const auto seed = this->get_parameter("initial_pose").as_double_array();
+    bool valid = seed.size() == 6;
+    for (const auto value : seed) valid = valid && std::isfinite(value);
+    if (!valid) {
+      response->success = false;
+      response->message = "Seeded recall requires six finite initial_pose values.";
+      return;
+    }
+    initial_pose_ = seed;
+  }
   // 1. Reset State
-  mode_ = Mode::MULTI_GUESS;
+  mode_ = seeded ? Mode::INITIAL_GUESS : Mode::MULTI_GUESS;
   state_ = State::UNINITIALIZED;
   converged_count_ = 0;
   has_localized_once_ = false;
   has_last_successful_pose_ = false;
   has_initial_reference_pose_ = false;
   convergence_poses_.clear();
+  timeout_fallback_ = false;
   {
     std::lock_guard<std::mutex> lock(cloud_mtx_);
     current_accumulated_frames_ = 0;
@@ -446,7 +506,8 @@ void GicpRosInterface::publishDefaultPose()
     pose_snapshot = map_to_camera_init_;
   }
 
-  gicp_utils::publishCurrentTransform(tf_broadcaster_, map_frame_, pose_snapshot, this->now());
+  gicp_utils::publishCurrentTransform(
+      tf_broadcaster_, map_frame_, pose_snapshot, this->now(), publish_3d_pose_);
   std::cout << color_text::GREEN << "[GICP] Default pose published" << color_text::RESET << std::endl;
 }
 
@@ -823,6 +884,7 @@ void GicpRosInterface::runFSM()
 
       publishDefaultPose();
       convergence_poses_.clear();
+      timeout_fallback_ = true;
 
       // 进入定位完成状态
       state_ = State::LOCALIZED;
@@ -1099,7 +1161,8 @@ void GicpRosInterface::runFSM()
           std::lock_guard<std::mutex> lock(pose_mtx_);
           pose_snapshot = map_to_camera_init_;
         }
-        gicp_utils::publishCurrentTransform(tf_broadcaster_, map_frame_, pose_snapshot, this->now());
+        gicp_utils::publishCurrentTransform(
+      tf_broadcaster_, map_frame_, pose_snapshot, this->now(), publish_3d_pose_);
         if (!enable_continuous_relocalization_) {
           // Suspend operations to save resources
           std::cout << color_text::BLUE << "[GICP] Suspending GICP update timer and lidar subscription."

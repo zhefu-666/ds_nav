@@ -1,0 +1,525 @@
+{
+  "generator": "generate_prior_map.py",
+  "generator_version": "2.0.0",
+  "frame": "map",
+  "frame_note": "identical to the Gazebo world frame; no static map->world offset exists",
+  "units": "metres (m), radians",
+  "representation": "visual_surface_prior; visibility is not simulated",
+  "visual_sources": [
+    {
+      "uri": "model://rmul_2027/meshes/rmul_2027.stl",
+      "sha256": "3307219107964be66af7f805b407c0e36e217cfb517d425ab2ec7ffc2ebf707b",
+      "triangles": 3811
+    }
+  ],
+  "model_world_transform": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      -1.0,
+      -0.0,
+      1.0
+    ],
+    [
+      0.0,
+      0.0,
+      -1.0,
+      0.5
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "sources": {
+    "world": {
+      "path": "../huananhu_sim_resources/worlds/rmul_2027_world.sdf",
+      "sha256": "91fac237b2f5ecca756e41220c247402902599ae647e9a5b117620188f71db0b"
+    },
+    "model_sdf": {
+      "path": "../huananhu_sim_resources/models/rmul_2027/model.sdf",
+      "sha256": "c859036ead07bb9ebd4d13c4d212c0d23ab6bca0378f5071eb40903259990c7a",
+      "uri": "model://rmul_2027"
+    }
+  },
+  "sampling": {
+    "structure_spacing_m": 0.05,
+    "floor_spacing_m": 0.1,
+    "interior_filter": {
+      "x": [
+        -6.02,
+        6.02
+      ],
+      "y": [
+        -3.02,
+        5.02
+      ],
+      "z": [
+        0.06,
+        0.6
+      ],
+      "note": "interior faces only: outer wall faces and floor under the walls dropped"
+    }
+  },
+  "geometry": [
+    {
+      "name": "north_wall",
+      "world_center": [
+        0.0,
+        -3.15,
+        0.23
+      ],
+      "size": [
+        12.6,
+        0.3,
+        0.5
+      ],
+      "samples": 8186
+    },
+    {
+      "name": "south_wall",
+      "world_center": [
+        0.0,
+        5.15,
+        0.23
+      ],
+      "size": [
+        12.6,
+        0.3,
+        0.5
+      ],
+      "samples": 8186
+    },
+    {
+      "name": "east_wall",
+      "world_center": [
+        6.15,
+        1.0,
+        0.23
+      ],
+      "size": [
+        0.3,
+        8.0,
+        0.5
+      ],
+      "samples": 5242
+    },
+    {
+      "name": "west_wall",
+      "world_center": [
+        -6.15,
+        1.0,
+        0.23
+      ],
+      "size": [
+        0.3,
+        8.0,
+        0.5
+      ],
+      "samples": 5242
+    },
+    {
+      "name": "west_roof",
+      "world_center": [
+        -2.5,
+        2.03,
+        0.281
+      ],
+      "size": [
+        2.0,
+        4.06,
+        0.002
+      ],
+      "samples": 6806
+    },
+    {
+      "name": "east_roof",
+      "world_center": [
+        2.5,
+        -0.03,
+        0.281
+      ],
+      "size": [
+        2.0,
+        4.06,
+        0.002
+      ],
+      "samples": 6806
+    },
+    {
+      "name": "west_support",
+      "world_center": [
+        -1.575,
+        1.8,
+        0.38
+      ],
+      "size": [
+        0.15,
+        1.8,
+        0.2
+      ],
+      "samples": 530
+    },
+    {
+      "name": "east_support",
+      "world_center": [
+        1.575,
+        0.2,
+        0.38
+      ],
+      "size": [
+        0.15,
+        1.8,
+        0.2
+      ],
+      "samples": 530
+    },
+    {
+      "name": "west_switch",
+      "world_center": [
+        -2.5,
+        4.005,
+        0.3158
+      ],
+      "size": [
+        0.34,
+        0.11,
+        0.0684
+      ],
+      "samples": 84
+    },
+    {
+      "name": "east_switch",
+      "world_center": [
+        2.5,
+        -2.005,
+        0.3158
+      ],
+      "size": [
+        0.34,
+        0.11,
+        0.0684
+      ],
+      "samples": 84
+    },
+    {
+      "name": "south_connector",
+      "world_center": [
+        -2.5,
+        4.93,
+        0.2052
+      ],
+      "size": [
+        0.35,
+        0.14,
+        0.2495
+      ],
+      "samples": 144
+    },
+    {
+      "name": "north_connector",
+      "world_center": [
+        2.5,
+        -2.93,
+        0.2053
+      ],
+      "size": [
+        0.35,
+        0.14,
+        0.2495
+      ],
+      "samples": 144
+    },
+    {
+      "name": "south_corner",
+      "world_center": [
+        -5.625,
+        4.775,
+        0.28
+      ],
+      "size": [
+        0.75,
+        0.45,
+        0.4
+      ],
+      "samples": 656
+    },
+    {
+      "name": "north_corner",
+      "world_center": [
+        5.625,
+        -2.775,
+        0.28
+      ],
+      "size": [
+        0.75,
+        0.45,
+        0.4
+      ],
+      "samples": 656
+    },
+    {
+      "name": "west_end_beam",
+      "world_center": [
+        -2.5,
+        4.02,
+        0.18
+      ],
+      "size": [
+        2.0,
+        0.08,
+        0.2
+      ],
+      "samples": 498
+    },
+    {
+      "name": "east_end_beam",
+      "world_center": [
+        2.5,
+        -2.02,
+        0.18
+      ],
+      "size": [
+        2.0,
+        0.08,
+        0.2
+      ],
+      "samples": 498
+    },
+    {
+      "name": "west_tunnel_metal_roof",
+      "world_center": [
+        -2.5,
+        4.46,
+        0.34
+      ],
+      "size": [
+        0.35,
+        0.96,
+        0.02
+      ],
+      "samples": 336
+    },
+    {
+      "name": "east_tunnel_metal_roof",
+      "world_center": [
+        2.5,
+        -2.46,
+        0.34
+      ],
+      "size": [
+        0.35,
+        0.96,
+        0.02
+      ],
+      "samples": 336
+    },
+    {
+      "name": "floor:floor_collision",
+      "world_top_z": 0.08,
+      "size": [
+        12.6,
+        8.6,
+        0.02
+      ],
+      "samples": 11049
+    }
+  ],
+  "result": {
+    "file": "prior_map.pcd",
+    "sha256": "6bb27cbc2c19bdc6b30d4918464df023dc65616865ebfc5426694d0fa5be8f14",
+    "points": 147623,
+    "bbox_min": [
+      -6.02,
+      -3.02,
+      0.08
+    ],
+    "bbox_max": [
+      6.02,
+      5.02,
+      0.5
+    ]
+  },
+  "occupancy_grid": {
+    "file": "rmul_2027.pgm",
+    "sha256": "0155da3072772cfc88aa76646f8e5d5fe7614970178dea16edff8ef3fa242216",
+    "yaml": {
+      "image": "rmul_2027.pgm",
+      "resolution": 0.01,
+      "origin": [
+        -6.55,
+        -3.55,
+        0.0
+      ],
+      "negate": 0,
+      "occupied_thresh": 0.65,
+      "free_thresh": 0.196
+    },
+    "size": {
+      "width": 1310,
+      "height": 910
+    },
+    "posture_band_z": [
+      0.085,
+      0.327
+    ],
+    "band_note": "folded posture: visual triangles clipped to world-height slab and projected as filled polygons, union solid collision footprints to avoid hollow volumes; .280m platforms occupied, .330m roof excluded; posture gate still required",
+    "occupied_cells": 394202,
+    "boxes": [
+      {
+        "visual_triangles_projected": 1736
+      },
+      {
+        "name": "north_wall",
+        "z": [
+          -0.02,
+          0.48
+        ],
+        "projected": true
+      },
+      {
+        "name": "south_wall",
+        "z": [
+          -0.02,
+          0.48
+        ],
+        "projected": true
+      },
+      {
+        "name": "east_wall",
+        "z": [
+          -0.02,
+          0.48
+        ],
+        "projected": true
+      },
+      {
+        "name": "west_wall",
+        "z": [
+          -0.02,
+          0.48
+        ],
+        "projected": true
+      },
+      {
+        "name": "west_roof",
+        "z": [
+          0.28,
+          0.282
+        ],
+        "projected": true
+      },
+      {
+        "name": "east_roof",
+        "z": [
+          0.28,
+          0.282
+        ],
+        "projected": true
+      },
+      {
+        "name": "west_support",
+        "z": [
+          0.28,
+          0.48
+        ],
+        "projected": true
+      },
+      {
+        "name": "east_support",
+        "z": [
+          0.28,
+          0.48
+        ],
+        "projected": true
+      },
+      {
+        "name": "west_switch",
+        "z": [
+          0.2816,
+          0.35
+        ],
+        "projected": true
+      },
+      {
+        "name": "east_switch",
+        "z": [
+          0.2816,
+          0.35
+        ],
+        "projected": true
+      },
+      {
+        "name": "south_connector",
+        "z": [
+          0.0805,
+          0.33
+        ],
+        "projected": true
+      },
+      {
+        "name": "north_connector",
+        "z": [
+          0.0805,
+          0.33
+        ],
+        "projected": true
+      },
+      {
+        "name": "south_corner",
+        "z": [
+          0.08,
+          0.48
+        ],
+        "projected": true
+      },
+      {
+        "name": "north_corner",
+        "z": [
+          0.08,
+          0.48
+        ],
+        "projected": true
+      },
+      {
+        "name": "west_end_beam",
+        "z": [
+          0.08,
+          0.28
+        ],
+        "projected": true
+      },
+      {
+        "name": "east_end_beam",
+        "z": [
+          0.08,
+          0.28
+        ],
+        "projected": true
+      },
+      {
+        "name": "west_tunnel_metal_roof",
+        "z": [
+          0.33,
+          0.35
+        ],
+        "projected": false
+      },
+      {
+        "name": "east_tunnel_metal_roof",
+        "z": [
+          0.33,
+          0.35
+        ],
+        "projected": false
+      }
+    ]
+  }
+}

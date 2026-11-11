@@ -42,7 +42,7 @@ string root_dir = ROOT_DIR;
 
 bool init_map = false, flg_first_scan = true;
 
-bool flg_reset = false, flg_exit = false;
+bool flg_reset = false;
 
 // surf feature in map
 PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
@@ -97,13 +97,6 @@ PointCloudXYZI::Ptr full_cloud_world(new PointCloudXYZI());
 uint64_t full_cloud_dropped_points_this_scan = 0;
 uint64_t last_full_cloud_enqueued_points = 0;
 uint64_t last_full_cloud_out_of_order = 0;
-
-void SigHandle(int sig)
-{
-  flg_exit = true;
-  RCLCPP_WARN(LOGGER, "catch sig %d", sig);
-  sig_buffer.notify_all();
-}
 
 // 读取 PCD 文件,返回点云指针
 PointCloudXYZI::Ptr loadPointcloudFromPcd(const std::string & file_path)
@@ -889,8 +882,6 @@ void LaserMappingNode::processingLoop()
 {
   rclcpp::Rate rate(500);
   while (rclcpp::ok() && running_.load()) {
-    if (flg_exit)
-      break;
     if (sync_packages(Measures)) {
       const bool statistics_enabled = RuntimeStatistics::instance().enabled();
       const auto process_wall_start =
@@ -1643,7 +1634,7 @@ RCLCPP_COMPONENTS_REGISTER_NODE(point_lio::LaserMappingNode)
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  signal(SIGINT, SigHandle);
+  // Keep rclcpp SIGINT/SIGTERM handlers: shutdown wakes the executor and worker.
   rclcpp::NodeOptions options;
   options.use_intra_process_comms(false);
   auto node = std::make_shared<point_lio::LaserMappingNode>(options);

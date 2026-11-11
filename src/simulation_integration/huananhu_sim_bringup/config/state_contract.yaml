@@ -1,0 +1,41 @@
+# Dynamic mathematical recovery is independently tested, not navigation acceptance.
+version: 2
+status: YAW1_IMPLEMENTED_RUNTIME_UNVERIFIED
+imu_parent_link: yaw1
+lidar_parent_link: yaw1
+supported_imu_parent_links: [chassis, yaw1]
+sensor_mount:
+  status: SIMULATION_ASSUMPTION_NOT_OPTICAL_CALIBRATION
+  source: yaw1/visual_1555 entity origin
+  xyz: [0.0557597190051302, 0.106643863403111, 0.163594690492484]
+  rpy: [-1.5707963267948966, 0.0, 0.0]
+  co_located: true
+input:
+  odometry: /aft_mapped_to_init
+  parent_frame: camera_init
+  child_frame: body
+  twist_frame: body
+  joint_states: /joint_states
+  joint: yaw1_joint
+  history: measurement_timestamp_bracketing_linear_interpolation_no_extrapolation
+output:
+  odometry: /sim/base_odom
+  parent_frame: camera_init
+  child_frame: base_footprint
+  twist_frame: base_footprint
+  lidar_origin_odometry: /sim/lidar_odom
+  covariance: UNSPECIFIED_ZERO_NOT_PROPAGATED
+  navigation_acceptance: false
+localization_modes:
+  prior: fresh_LIO_and_GICP_localized_and_map_transform
+  mapping: fresh_LIO_and_3_seconds_100_samples_stationary_recovered_base
+limitations:
+  - Co-located yaw1 sensor origin is a simulation assumption; not an optical calibration.
+  - Cross-joint IMU and lidar mounting is rejected.
+  - Point-LIO rigidity assumption still requires runtime yaw1 motion validation.
+  - Joint velocity is measurement-history finite difference; no command feedback or truth.
+  - Dynamic covariance propagation is not implemented.
+  - GICP initial alignment is not continuous localization health monitoring.
+  - Pause invalidates freshness; clock rollback latches false and requires estimator restart.
+  - Mapping readiness is a minimum initialization gate, not proof of mapping accuracy.
+  - Snapshot/micro-scan motion distortion and CAD occlusion need runtime acceptance.

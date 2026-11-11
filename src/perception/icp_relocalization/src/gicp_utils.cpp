@@ -98,7 +98,8 @@ double computeSafeLeafSize(const PointCloud::Ptr & cloud, double requested_leaf)
 void publishCurrentTransform(const std::shared_ptr<tf2_ros::TransformBroadcaster> & tf_broadcaster,
   const std::string & map_frame,
   const Eigen::Matrix4f & map_to_camera_init,
-  const rclcpp::Time & stamp)
+  const rclcpp::Time & stamp,
+  bool full_pose)
 {
   if (!tf_broadcaster) {
     return;
@@ -111,6 +112,21 @@ void publishCurrentTransform(const std::shared_ptr<tf2_ros::TransformBroadcaster
 
   const float x = map_to_camera_init(0, 3);
   const float y = map_to_camera_init(1, 3);
+
+  if (full_pose) {
+    Eigen::Quaternionf q(map_to_camera_init.block<3, 3>(0, 0));
+    q.normalize();
+    t.transform.translation.x = x;
+    t.transform.translation.y = y;
+    t.transform.translation.z = map_to_camera_init(2, 3);
+    t.transform.rotation.x = q.x();
+    t.transform.rotation.y = q.y();
+    t.transform.rotation.z = q.z();
+    t.transform.rotation.w = q.w();
+    tf_broadcaster->sendTransform(t);
+    return;
+  }
+
   const float yaw = std::atan2(map_to_camera_init(1, 0), map_to_camera_init(0, 0));
 
   t.transform.translation.x = x;

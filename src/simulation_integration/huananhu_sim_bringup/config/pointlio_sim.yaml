@@ -1,0 +1,113 @@
+/**:
+    ros__parameters:
+        use_imu_as_input: False
+        prop_at_freq_of_imu: True
+        check_satu: True
+        init_map_size: 10
+        point_filter_num: 1
+        space_down_sample: True
+        filter_size_surf: 0.15
+        filter_size_map: 0.15
+        ivox_nearby_type: 6
+        # 20261030 GLM diagnosis note: flipping this to True writes per-batch
+        # EKF state CSVs (pos/vel/euler/gravity/bg/ba) and per-frame stats to
+        # runtime_log_path. It exposed the +x z-sink mechanism (run_009/010/011
+        # evidence in artifacts/glm53flash_20261030T073431): scan corrections
+        # bound vz in clean runs; in sink runs vz ramps to -0.4 m/s and pose z
+        # integrates the error. Re-disabled after the diagnosis.
+        runtime_pos_log_enable: False
+        runtime_log_path: "/tmp/point_lio_sim_log"
+        debug_pose_update_detail: False
+        print_cloud_input_fps: False
+
+        common:
+            lid_topic: "/livox/lidar"
+            imu_topic: "/livox/imu"
+            con_frame: False
+            con_frame_num: 1
+            cut_frame: False
+            cut_frame_time_interval: 0.1
+            print_cloud_input_fps: False
+            cloud_input_fps_print_period: 1.0
+            debug_pose_update_detail: False
+            debug_pose_update_detail_period: 1.0
+            time_diff_lidar_to_imu: 0.0
+
+        prior_pcd:
+            enable: False
+            prior_pcd_map_path: ""
+            init_pose: [ 0.0, 0.0, 0.0 ]
+
+        preprocess:
+            # 1 = Livox CustomMsg. /livox/lidar in simulation is produced by
+            # huananhu_sim_bridge from the Fortress gpu_lidar frame.
+            lidar_type: 1
+            scan_line: 16
+            timestamp_unit: 3
+            blind: 0.20
+            blind_center_enable: False
+            blind_center: [ 0.0, 0.0, 0.0 ]
+
+        mapping:
+            imu_en: True
+            extrinsic_est_en: False
+            imu_time_inte: 0.005
+            lidar_time_inte: 0.1
+            # Saturation thresholds are compared against the *raw* IMU sample
+            # (Estimator.cpp h_model_IMU_output), so they must use the same unit
+            # as the input. Gazebo publishes m/s^2 (stationary az ~ 9.8), so a
+            # 3 g threshold is 30.0. Using 3.0 (the MID360 g-unit value) marks the
+            # vertical axis as saturated on every frame, discards the vertical
+            # accelerometer residual and lets z diverge as soon as the robot moves.
+            satu_acc: 30.0
+            satu_gyro: 35.0
+            # Gazebo IMU publishes m/s^2, unlike the real MID360 driver.
+            acc_norm: 9.8
+            lidar_meas_cov: 0.01
+            acc_cov_output: 500.0
+            gyr_cov_output: 1000.0
+            b_acc_cov: 0.0001
+            b_gyr_cov: 0.0001
+            imu_meas_acc_cov: 0.01
+            imu_meas_omg_cov: 0.01
+            gyr_cov_input: 0.01
+            acc_cov_input: 0.1
+            plane_thr: 0.1
+            # EKF pose-update batching (ms). 20261030 GLM evidence: with 2 ms
+            # bins a micro composite (0/25/50/75 ms point offsets) becomes four
+            # single-sector wedge updates and loses +y translation (raw LIO dy
+            # .016 m of .282 m truth, run_002); with a 1000 ms bin it tracks xy
+            # in motion but drifts/z-collapses without undistortion (run_003).
+            # Snapshot frames (one stamp) are unaffected by this value.
+            pose_update_time_bin_ms: 2.0
+            match_s: 81.0
+            # 0.5 m is Point-LIO's default. The 2.0 m value in mid360.yaml is for
+            # outdoor scenes; inside the 12.6 x 8.6 m arena it makes the ivox
+            # neighbour search span several metres, so only ~130 of ~3300 points
+            # get usable plane correspondences and the vertical state drifts.
+            ivox_grid_resolution: 0.5
+            gravity: [ 0.0, 0.0, -9.8 ]
+            gravity_init: [ 0.0, 0.0, -9.8 ]
+            # Co-located yaw1 simulation measurement frames (SIMULATION_ASSUMPTION).
+            extrinsic_T: [ 0.0, 0.0, 0.0 ]
+            extrinsic_R: [ 1.0, 0.0, 0.0,
+                           0.0, 1.0, 0.0,
+                           0.0, 0.0, 1.0 ]
+
+        odometry:
+            publish_odometry_without_downsample: True
+            publish_frequency_hz: 100
+
+        publish:
+            path_en: True
+            scan_publish_en: True
+            scan_bodyframe_pub_en: False
+            # Keep false: Point-LIO's camera_init->base_link edge would add a
+            # second parent to base_link. huananhu_sim_bridge publishes
+            # camera_init->base_footprint from /aft_mapped_to_init instead.
+            tf_send_en: False
+
+        pcd_save:
+            pcd_save_en: False
+            accumulated_map_publish_hz: 1.0
+            interval: 3600

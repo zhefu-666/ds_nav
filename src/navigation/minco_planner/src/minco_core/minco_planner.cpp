@@ -409,6 +409,9 @@ void MincoPlanner::configure(const nav2_util::LifecycleNode::WeakPtr & parent,
   nav2_util::declare_parameter_if_not_declared(
     node, prefix + "minco_optimizer.enable_yaw_opt", rclcpp::ParameterValue(true));
   node->get_parameter(prefix + "minco_optimizer.enable_yaw_opt", use_yaw_opt_);
+  nav2_util::declare_parameter_if_not_declared(
+    node, prefix + "minco_optimizer.respect_goal_yaw", rclcpp::ParameterValue(false));
+  node->get_parameter(prefix + "minco_optimizer.respect_goal_yaw", respect_goal_yaw_);
 
   nav2_util::declare_parameter_if_not_declared(
     node, prefix + "minco_optimizer.time_allocation_iters", rclcpp::ParameterValue(15));
@@ -1234,18 +1237,22 @@ bool MincoPlanner::ReplanLocal(const geometry_msgs::msg::PoseStamped & current_p
     }
   }
 
-  constexpr double slope_threshold = 0.1;
-  if (std::abs(pitch) > slope_threshold && sparse_path.size() >= 2) {
-    goal_yaw = std::atan2(end_state.col(1).y(), end_state.col(1).x());
-  } else if (sparse_path.size() >= 2) {
-    const Eigen::Vector2d tail_dir = (sparse_path.back() - sparse_path[sparse_path.size() - 2]).head<2>();
-    if (tail_dir.norm() > 0.1) {
-      goal_yaw = std::atan2(tail_dir.y(), tail_dir.x());
+  // Nav2 pose goals may require a terminal heading; keep competition path-facing
+  // yaw unless explicitly enabled and this local segment reaches the global goal.
+  if (!respect_goal_yaw_ || dist_to_goal > traj_goal_tolerance_) {
+    constexpr double slope_threshold = 0.1;
+    if (std::abs(pitch) > slope_threshold && sparse_path.size() >= 2) {
+      goal_yaw = std::atan2(end_state.col(1).y(), end_state.col(1).x());
+    } else if (sparse_path.size() >= 2) {
+      const Eigen::Vector2d tail_dir = (sparse_path.back() - sparse_path[sparse_path.size() - 2]).head<2>();
+      if (tail_dir.norm() > 0.1) {
+        goal_yaw = std::atan2(tail_dir.y(), tail_dir.x());
+      } else {
+        goal_yaw = getCurrentYawFromOdom();
+      }
     } else {
       goal_yaw = getCurrentYawFromOdom();
     }
-  } else {
-    goal_yaw = getCurrentYawFromOdom();
   }
 
   traj_opt::Trajectory yaw_traj;
@@ -1579,7 +1586,7 @@ bool MincoPlanner::optimizeYaw(const Eigen::Matrix3d & start_state,
   goal_yaw_state(0) = init_yaw_state(0) + yaw_err;
   goal_yaw_state(1) = 0.0;
 
-  return yaw_opt_->optimize(init_yaw_state, goal_yaw_state, pos_traj, out_yaw_traj, 5, false, true);
+  return yaw_opt_->optimize(init_yaw_state, goal_yaw_state, pos_traj, out_yaw_traj, 5, false, !respect_goal_yaw_);
 }
 
 // -----------------------------------------------------------------------------

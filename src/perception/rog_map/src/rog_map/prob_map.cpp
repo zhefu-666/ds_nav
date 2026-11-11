@@ -64,11 +64,10 @@ void uniqueVec3i(vec_E<Vec3i> & ids)
 
 void ProbMap::initProbMap()
 {
-  static bool init_once{false};
-  if (init_once) {
+  if (init_once_) {
     throw std::runtime_error(" -- [ROGMap] ProbMap can only init once.");
   }
-  init_once = true;
+  init_once_ = true;
   initSlidingMap(cfg_.half_map_size_i,
     cfg_.resolution,
     cfg_.map_sliding_en,
@@ -400,9 +399,8 @@ void ProbMap::updateProbMap(
   }
 
   /* For the first frame, clear all unknown around the robot */
-  static bool first = true;
-  if (first) {
-    first = false;
+  if (first_frame_) {
+    first_frame_ = false;
     for (double dx = -cfg_.raycast_range_min; dx <= cfg_.raycast_range_min; dx += cfg_.resolution) {
       for (double dy = -cfg_.raycast_range_min; dy <= cfg_.raycast_range_min; dy += cfg_.resolution) {
         for (double dz = -cfg_.raycast_range_min; dz <= cfg_.raycast_range_min; dz += cfg_.resolution) {

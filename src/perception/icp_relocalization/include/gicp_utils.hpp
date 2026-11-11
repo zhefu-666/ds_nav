@@ -13,10 +13,13 @@
 
 namespace icp_relocalization::gicp_utils {
 
+// full_pose=false keeps the competition behaviour (planar map->camera_init:
+// z=0, yaw only). full_pose=true publishes the full 6-DoF result.
 void publishCurrentTransform(const std::shared_ptr<tf2_ros::TransformBroadcaster> & tf_broadcaster,
   const std::string & map_frame,
   const Eigen::Matrix4f & map_to_camera_init,
-  const rclcpp::Time & stamp);
+  const rclcpp::Time & stamp,
+  bool full_pose = false);
 
 void publishStaticTf(const std::shared_ptr<tf2_ros::StaticTransformBroadcaster> & static_tf_broadcaster,
   const std::string & map_frame,

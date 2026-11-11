@@ -1,0 +1,9 @@
+{
+  "sampling_mode": "micro_scan",
+  "micro_publish_mode": "composite",
+  "micro_batches": "4",
+  "navigation": "true",
+  "render_engine": "ogre",
+  "render_engine_library": "auto",
+  "real_time_factor": "0.2"
+}

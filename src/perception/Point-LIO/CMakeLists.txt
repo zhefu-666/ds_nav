@@ -173,4 +173,11 @@ ament_export_dependencies(
   PCL
 )
 
+if(BUILD_TESTING)
+  enable_testing()
+  add_executable(point_lio_lidar_gain_test test/test_lidar_gain.cpp)
+  target_compile_options(point_lio_lidar_gain_test PRIVATE -O0)
+  add_test(NAME point_lio_lidar_gain_regression COMMAND point_lio_lidar_gain_test)
+endif()
+
 ament_package()

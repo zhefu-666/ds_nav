@@ -1,0 +1,163 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.7">
+  <model name="rmul_2027">
+    <static>true</static>
+    <link name="field">
+      <visual name="field_visual">
+        <geometry>
+          <mesh>
+            <uri>model://rmul_2027/meshes/rmul_2027.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.5 0.5 0.5 1</ambient>
+          <diffuse>0.7 0.7 0.7 1</diffuse>
+        </material>
+      </visual>
+      <collision name="north_wall">
+        <pose>0 4.15 0.27 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>12.6 0.3 0.5</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="south_wall">
+        <pose>0 -4.15 0.27 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>12.6 0.3 0.5</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="east_wall">
+        <pose>6.15 0 0.27 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3 8 0.5</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="west_wall">
+        <pose>-6.15 0 0.27 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.3 8 0.5</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="west_roof">
+        <pose>-2.5 -1.03 .219 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>2.0 4.06 .002</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="east_roof">
+        <pose>2.5 1.03 .219 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>2.0 4.06 .002</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="west_support">
+        <pose>-1.575 -0.8 0.12 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.15 1.8 0.2</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="east_support">
+        <pose>1.575 0.8 0.12 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.15 1.8 0.2</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="west_switch">
+        <pose>-2.5 -3.005 .1842 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>.34 .11 .0684</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="east_switch">
+        <pose>2.5 3.005 .1842 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>.34 .11 .0684</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="south_connector">
+        <pose>-2.5 -3.93000000 .29475 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>.35 .14 .2495</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="north_connector">
+        <pose>2.5 3.93000000 .29475 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>.35 .14 .2495</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="south_corner">
+        <pose>-5.625 -3.775 0.22 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.75 0.45 0.4</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="north_corner">
+        <pose>5.625 3.775 0.22 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.75 0.45 0.4</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="west_end_beam">
+        <pose>-2.5 -3.02 .32 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>2.0 .08 .20</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="east_end_beam">
+        <pose>2.5 3.02 .32 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>2.0 .08 .20</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="west_tunnel_metal_roof">
+        <pose>-2.5 -3.46000000 .16 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>.35 .96 .02</size>
+          </box>
+        </geometry>
+      </collision>
+      <collision name="east_tunnel_metal_roof">
+        <pose>2.5 3.46000000 .16 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>.35 .96 .02</size>
+          </box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

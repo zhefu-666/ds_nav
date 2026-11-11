@@ -1,0 +1,11 @@
+{
+  "system_package_version": "6.6.4-1~jammy",
+  "upstream_tag": "ignition-rendering6_6.6.4",
+  "upstream_url": "https://github.com/gazebosim/gz-rendering/tree/ignition-rendering6_6.6.4",
+  "tarball_sha256": "6610084357cd1af051c84967f25d561ced2130f8e43a65d786d340a5fdb5d659",
+  "modified_files": [
+    "ogre/src/OgreGpuRays.cc"
+  ],
+  "scope": "same-ABI Ogre1 backend only; installed core and system packages unchanged",
+  "runtime_validation": "pending parent run"
+}

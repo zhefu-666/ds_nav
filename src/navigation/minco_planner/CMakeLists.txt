@@ -135,4 +135,15 @@ ament_export_dependencies(
   rog_map
 )
 ament_export_targets(${library_name})
+if(BUILD_TESTING)
+  enable_testing()
+  add_executable(test_smac_repeated_query test/test_smac_repeated_query.cpp)
+  target_link_libraries(test_smac_repeated_query ${library_name})
+  ament_target_dependencies(test_smac_repeated_query nav2_costmap_2d rclcpp_lifecycle rog_map)
+  add_test(NAME smac_repeated_query COMMAND test_smac_repeated_query)
+  add_executable(test_yaw_goal_constraint test/test_yaw_goal_constraint.cpp)
+  target_link_libraries(test_yaw_goal_constraint ${library_name})
+  add_test(NAME yaw_goal_constraint COMMAND test_yaw_goal_constraint)
+endif()
+
 ament_package()

@@ -475,6 +475,66 @@ scan_z_max_abs ≈ h_max - h_lidar
 
 ## 🚀 启动系统
 
+### 仿真统一入口（与实车分开）
+
+清理后的目录说明与既定目标差距见 [项目状态](docs/PROJECT_STATUS.md)。历史实验和报告已移出工作空间，归档位置与清单见该文档。
+
+完整的仿真进度、启动/调试命令、参数来源、代码结构及验收边界见 [仿真 README](docs/simulation_integration/README.md)（2026-11-09核对）。
+
+```bash
+./scripts/huananhu_sim.bash --headless --check-install
+./scripts/huananhu_sim.bash --headless
+# 需要界面时省略 --headless；需要 RViz 时增加 --rviz。
+```
+
+默认启动定位及 Nav2 + MINCO + MPC，定位就绪后才创建导航节点，不自动发送目标。
+Shell 与 `ros2 launch huananhu_sim_bringup simulation.launch.py` 共享
+`src/simulation_integration/huananhu_sim_bringup/config/simulation_defaults.json`：
+40 Hz 采集、四批合成 10 Hz 点云、Ogre1 修补版、实时因子 0.2。
+修补版渲染库随仿真包安装并校验 SHA256，不再依赖 artifacts 下的临时路径，也不覆盖系统库。
+
+只检查定位时使用 `--no-navigation`；只检查物理和传感器时使用 `--no-localization`。
+隧道机械夹具继续使用 `--scene tunnel_spec_250 --physics-test`，诊断模式默认关闭导航。
+显式任务入口 `scripts/sim_tunnel_mission.py` 已串联普通导航、已知隧道局部段、洞外移出、GICP重定位及导航恢复。最新 `yaw_margin_v2` 的9项主场景与2项冷启动复验均为限定范围PASS，包含东西两侧各五次穿行、取消及Point-LIO退出停车。验收显式使用轮PID `wheel_proportional_gain:=1.0 wheel_integral_gain:=0.2` 和RTF0.15；普通默认PID仍为0.30/1.0，不能用专项结果证明普通默认也通过隧道。该入口没有拦截默认 `/navigate_to_pose`，不支持未知隧道发现。证据和未闭环的历史问题见 [仿真 README](docs/simulation_integration/README.md)。
+直接使用 ROS launch 时，定位和夹具诊断也默认不启动导航；显式要求不兼容的组合会报错。
+`--sampling snapshot`、`--render-engine ogre2` 保留为诊断选项，不代表已验证的默认配置。
+
+仿真规划器使用 `simulation_planner_server`：内部仍运行官方 Nav2 PlannerServer，
+先停止执行器等待，再执行 ROS 生命周期清理。Point-LIO 使用 ROS 原生 SIGINT/SIGTERM 退出。
+Ctrl+C 用于正常停止；退出保护不保证 SIGKILL 或硬件故障下的清理。
+实车仍按下面的独立入口启动。
+
+仿真任务工具支持顺序目标和有界取消测试（在另一个终端运行，domain 与仿真实例一致）：
+
+```bash
+ROS_DOMAIN_ID=87 python3 scripts/sim_nav_trial.py --goal -4.4 0 0 --out /tmp/nav_goal.json
+ROS_DOMAIN_ID=87 python3 scripts/sim_nav_trial.py --mission /absolute/path/mission.json --out /tmp/nav_mission.json
+ROS_DOMAIN_ID=87 python3 scripts/sim_nav_trial.py --goal -4.4 -1 0 --cancel-after 8 --out /tmp/nav_cancel.json
+```
+
+任务文件为 `[[x,y,yaw], ...]`，角度单位为 rad，坐标属于当前 `map`。
+工具会等待定位、姿态及导航就绪；中断时保留 context 完成取消、禁用控制与结果落盘。
+`completed` 表示导航动作结果；`cancel_test_passed` 只表示取消确认、取消终态和新鲜的 disabled 状态，
+不替代独立的真实停车、精度和碰撞评估。
+
+仿真 MINCO 配置显式启用 `minco_optimizer.respect_goal_yaw`，使终端朝向遵守目标；
+该配置期参数在比赛默认中为 false。仿真到点判定使用官方 `StoppedGoalChecker`，
+内部完成条件为0.15m / 2.5°，平移和旋转速度不超过0.05；独立真实朝向验收仍为3°。内部朝向收紧用于保留估计误差余量，未放宽评分。
+仿真 BT 动作响应/取消等待为 500ms，覆盖 50ms 控制器周期；BT 周期仍为 20ms。
+状态适配节点先验证已到达的新鲜样本，再判断历史样本超时；真实断流和位姿跳变仍锁定保护。
+监督器在启动它的父进程消失时，也会请求本次仿真退出。
+
+单机回归遇到网卡变化或 `Network is unreachable` 时，可将本次仿真限制在回环接口：
+
+```bash
+IGN_IP=127.0.0.1 GZ_IP=127.0.0.1 ROS_LOCALHOST_ONLY=1 ./scripts/huananhu_sim.bash --headless
+```
+
+配套任务/记录终端也须设置 `ROS_LOCALHOST_ONLY=1` 及相同 `ROS_DOMAIN_ID`；该方式用于本机测试。
+P1 的修改、失败证据和验证范围见 [P1 导航闭环记录](/home/liu/ds_nav_archive/20261110_cleanup/docs/ai_refactor_records/20261101_p1_navigation_closure.md)
+及 [P1 后续修复记录](/home/liu/ds_nav_archive/20261110_cleanup/docs/ai_refactor_records/20261101_p1_followup.md)。
+
+
 ### 1. 分模块启动（推荐首次上车）
 
 每个终端都先执行：

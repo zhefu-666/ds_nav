@@ -117,6 +117,9 @@ namespace rog_map {
         RuntimeStats runtimeStats() const { return runtime_stats_; }
 
     protected:
+        // Lifecycle reconfiguration creates a new map; flags must belong to that instance.
+        bool init_once_{false};
+        bool first_frame_{true};
         rog_map::Config cfg_;
         InfMap::Ptr inf_map_;
         FreeCntMap::Ptr fcnt_map_;

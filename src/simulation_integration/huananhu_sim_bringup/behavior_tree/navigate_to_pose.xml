@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- Simulation baseline: MINCO publishes its own time trajectory. Do not smooth
+     the Path separately and diverge from the MPC reference. Failure propagates
+     to the task executor; automatic spin/backup is intentionally absent. -->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="MincoOwnsReplanning">
+        <ComputePathToPose goal="{goal}" path="{path}" planner_id="MincoPlanner"/>
+      <FollowPath path="{path}" controller_id="FollowPath" goal_checker_id="general_goal_checker"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

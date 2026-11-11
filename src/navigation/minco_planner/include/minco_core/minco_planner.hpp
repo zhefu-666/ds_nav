@@ -164,6 +164,7 @@ private:
   bool allow_unknown_;
   bool use_smac_;
   bool use_yaw_opt_{true};
+  bool respect_goal_yaw_{false};
   bool priormap_use_nav2_global_search_{true};
   bool priormap_clip_seed_by_rog_boundary_{true};
   bool exploration_unknown_as_occupied_{true};

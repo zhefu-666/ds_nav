@@ -4,6 +4,7 @@
 
 #include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
+#include "std_msgs/msg/string.hpp"
 
 #include "pcl_conversions/pcl_conversions.h"
 
@@ -66,6 +67,7 @@ private:
   void startVisualizationTimer();
   void startTfPublishTimer();
   void tfPublishTimerCallback();
+  void publishLocalizationState();
 
   // ROS 接口
   std::unique_ptr<GicpFilter> gicp_filter_;
@@ -76,6 +78,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_source_aligned_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_target_raw_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_target_cropped_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr localization_state_pub_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -178,11 +181,16 @@ private:
   int converged_count_threshold_;     // 收敛次数阈值
   int converged_count_ = 0;           // 当前收敛次数
   bool has_localized_once_ = false;   // 是否曾经成功进入LOCALIZED
+  bool timeout_fallback_ = false;     // 是否由超时默认位姿兜底（不得视为定位成功）
   std::vector<double> initial_pose_;  // 初始位姿猜测 [x, y, z, roll, pitch, yaw]
 
   std::chrono::duration<double> fsm_period_{1.0};
   double tf_publish_frequency_ = 10.0;
   std::chrono::duration<double> tf_publish_period_{0.1};
+  // Competition default keeps the published map->camera_init planar
+  // (z=0, yaw only). Simulation sets this true to keep the 6-DoF result that
+  // the 3D prior map constrains, so the chassis TF is not 0.19 m off the floor.
+  bool publish_3d_pose_ = false;
 
   GicpFilter::Options gicp_options_;
 };

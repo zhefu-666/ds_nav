@@ -1,0 +1,23 @@
+{
+  "fold_rad": 0.0,
+  "yaw1_rad": 0.0,
+  "yaw2_rad": 0.0,
+  "aim_rad": 0.06981317007977318,
+  "cad_bounds_at_profile_m": [
+    [
+      -0.29700346,
+      -0.2970000000000001,
+      -0.06205082913212834
+    ],
+    [
+      0.39264415601040636,
+      0.4555752829653078,
+      0.18241839105429955
+    ]
+  ],
+  "cad_height_m": 0.2444692201864279,
+  "cad_width_y_m": 0.7525752829653078,
+  "lane_body_center_y_m": -0.07928764148265385,
+  "joint_tolerance_rad": 0.01,
+  "source": "Unscaled exported CAD; fold is CAD capture-relative, aim +4 deg coordinates pitch2 head. No encoder calibration implied."
+}

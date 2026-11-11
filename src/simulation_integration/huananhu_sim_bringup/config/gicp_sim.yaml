@@ -1,0 +1,79 @@
+gicp_relocalization_node:
+  ros__parameters:
+    mode: "initial_guess"
+    # Overridden by the launch file with the installed prior_map.pcd.
+    target_pcd_file: ""
+    map_frame: "map"
+    visualization_en: false
+    source_cloud_topic: "/cloud_registered_full"
+    alignment_frequency: 5.0
+    accumulate_frames: 3
+    tf_publish_frequency: 100.0
+    # The competition default publishes map->camera_init planar (z=0, yaw only).
+    # This arena's prior map is 3D, and a planar TF would put base_footprint
+    # 0.19 m below the floor (invisible in 2D, wrong for ROGMap height band and
+    # tunnel clearance). Keep the full 6-DoF result here.
+    publish_3d_pose: true
+    gicp:
+      score_threshold: -1.0
+      normalized_score_threshold: 0.2
+      min_inlier_ratio: 0.5
+      min_overlap_ratio: 0.5
+      fine_alignment:
+        enable: true
+        coarse_first_window_only: true
+        max_correspondence_distance: 0.2
+      planar_observability:
+        enable: false
+        min_eigen_ratio: 0.001
+      target_voxel_leaf_size: 0.05
+      source_voxel_leaf_size: 0.05
+      local_map_radius: 12.0
+      max_correspondence_distance: 0.5
+      max_iterations: 100
+      transformation_epsilon: 0.01
+      euclidean_fitness_epsilon: 0.01
+    converged_count_threshold: 3
+    convergence:
+      max_xy_spread: 0.15
+      max_yaw_spread: 0.02
+    initial_pose_guard:
+      enable: true
+      max_translation_correction: 0.4
+      max_yaw_correction: 0.2
+    results:
+      enable: true
+      path: "/tmp/gicp_sim_results.csv"
+    recall_use_parameter_seed: true
+    enable_continuous_relocalization: false
+    max_tracking_lost_count: 3
+    continuous_relocalization:
+      max_translation_jump: 0.1
+      max_yaw_jump: 0.1
+    # Simulation runs must fail visibly instead of silently accepting the
+    # default pose; the node's fallback is only reachable after this budget.
+    timeout_seconds: 3600.0
+    default_pose_on_timeout: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    # map -> camera_init, not the chassis spawn pose: the model spawns with
+    # base_footprint at z=0.08 and settles there, while camera_init starts at
+    # the IMU/body origin, which is chassis z + 0.10 (carrier.urdf), i.e. 0.18.
+    # Overridden by launch.
+    initial_pose: [-5.0, 0.0, 0.18, 0.0, 0.0, 0.0]
+    multi_guess:
+      search_rectangles: [0.0, 3.0, 0.0, 3.0, -2.0, 0.0, -1.0, 1.0]
+      z_candidates: [0.0, 0.4]
+      step_x: 2.0
+      step_y: 2.0
+      step_yaw: 0.785398
+    height_filter:
+      enable: true
+      min_z: -0.5
+      max_z: 2.5
+    source_crop:
+      enable: true
+      min_x: -8.0
+      max_x: 8.0
+      min_y: -8.0
+      max_y: 8.0
+      min_z: -0.5
+      max_z: 3.0
