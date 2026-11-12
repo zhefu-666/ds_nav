@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+BUILD_SCOPE=${BUILD_SCOPE:-full}
+if [[ "$BUILD_SCOPE" != full && "$BUILD_SCOPE" != real ]]; then
+  echo "BUILD_SCOPE must be full or real" >&2
+  exit 2
+fi
+
 source /opt/ros/humble/setup.bash
 # source ../ws_livox/install/setup.bash
 
@@ -63,6 +69,17 @@ cmake_args=(
 	-DPython3_EXECUTABLE=/usr/bin/python3
 	-DPYTHON_EXECUTABLE=/usr/bin/python3
 )
+
+# Real-robot dependency closure excludes simulation integration packages.
+if [[ "$BUILD_SCOPE" == real ]]; then
+  colcon build \
+    --symlink-install \
+    --parallel-workers 1 \
+    --packages-up-to navi2 point_lio icp_relocalization bt_manager communication pcd2pgm \
+    --cmake-args "${cmake_args[@]}" \
+    --event-handlers console_direct+ status+
+  exit
+fi
 
 serial_packages=(
 	ros_interfaces

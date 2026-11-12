@@ -25,6 +25,22 @@ def generate_launch_description():
         'params_file', default=os.path.join(DreamChaser_dir, 'params', 'sentry1.yaml'))
 
     return launch.LaunchDescription([
+        launch.actions.DeclareLaunchArgument('use_rviz', default_value='true',
+            description='Start RViz on this host'),
+        launch.actions.DeclareLaunchArgument('use_cloud_filter', default_value='true',
+            description='Provide the filtered cloud required by the local STVL layer'),
+        launch.actions.DeclareLaunchArgument('filter_config',
+            default_value=os.path.join(get_package_share_directory('msg_convert'),
+                'config', 'cloud_registered_crop_filter.yaml'),
+            description='Cloud filter config for this field'),
+        launch.actions.IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(
+                get_package_share_directory('msg_convert'), 'launch',
+                'cloud_registered_crop_filter.launch.py')),
+            launch_arguments={'config_file': launch.substitutions.LaunchConfiguration(
+                'filter_config')}.items(),
+            condition=launch.conditions.IfCondition(
+                launch.substitutions.LaunchConfiguration('use_cloud_filter'))),
         # 静态TF: map -> camera_init
         # launch_ros.actions.Node(
         #     package='tf2_ros',
@@ -101,6 +117,8 @@ def generate_launch_description():
             executable='rviz2',
             name='rviz2',
             arguments=['-d', rviz_config_dir],
+            condition=launch.conditions.IfCondition(
+                launch.substitutions.LaunchConfiguration('use_rviz')),
             parameters=[{'use_sim_time': use_sim_time}],
             output='screen'),
             

@@ -2,6 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterFile
 from launch.actions import DeclareLaunchArgument, LogInfo
 from launch.substitutions import LaunchConfiguration
 
@@ -25,7 +26,7 @@ def generate_launch_description():
         executable='gicp_node',
         name='gicp_relocalization_node',
         output='screen',
-        parameters=[LaunchConfiguration('gicp_config')],
+        parameters=[ParameterFile(LaunchConfiguration('gicp_config'), allow_substs=True)],
     )
 
     ld.add_action(gicp_node)

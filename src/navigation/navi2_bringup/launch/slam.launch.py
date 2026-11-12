@@ -14,9 +14,7 @@ def generate_launch_description():
     # Resolve package directories and default files.
     nav2_pkg_dir = get_package_share_directory('navi2')
     slam_params = os.path.join(nav2_pkg_dir, 'params', 'slam.yaml')
-    workspace_dir = os.path.abspath(os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), '../../../..'))
-    save_map_script = os.path.join(workspace_dir, 'scripts', 'savemap.bash')
+    save_map_script = os.path.join(nav2_pkg_dir, 'scripts', 'savemap.bash')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     cloud_topic = LaunchConfiguration('cloud_topic')
@@ -79,6 +77,7 @@ def generate_launch_description():
         name='rviz2',
         output='screen',
         arguments=['-d', os.path.join(nav2_pkg_dir, 'config', 'slam.rviz')],
+        condition=IfCondition(LaunchConfiguration('use_rviz')),
         remappings=[
             ('/map', map_topic),
             ('/map_updates', map_updates_topic)
@@ -125,6 +124,8 @@ def generate_launch_description():
         default_value='60.0',
         description='Seconds between automatic map saves'))
 
+    ld.add_action(DeclareLaunchArgument('use_rviz', default_value='true',
+        description='Start RViz on this host'))
     ld.add_action(pcl_to_scan_cmd)
     ld.add_action(slam_cmd)
     ld.add_action(rviz_cmd)

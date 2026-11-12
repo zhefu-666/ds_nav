@@ -1,5 +1,6 @@
 #!/bin/bash
-cd ~/ds_nav
+cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" || exit 1
+source /opt/ros/humble/setup.bash
 source ./install/setup.bash
 
 # PTP Sync

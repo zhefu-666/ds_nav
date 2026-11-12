@@ -19,7 +19,7 @@
 </div>
 
 > [!IMPORTANT]
-> 本仓库是北京理工大学追梦战队 2026 赛季哨兵导航工程。配置包含特定车辆的 IP、外参、地图原点和比赛参数，不能未经标定直接用于另一台机器人。首次上车前请完整阅读[上车前关键配置](#上车前关键配置)。
+> 本仓库是北京理工大学追梦战队 2026 赛季哨兵导航工程。配置包含特定车辆的 IP、外参、地图原点和比赛参数，不能未经标定直接用于另一台机器人。首次上车前请完整阅读[实车接入与远程调试操作手册](REAL_ROBOT_DEPLOYMENT.md)和[上车前关键配置](#上车前关键配置)。
 
 ## 🏠 项目简介
 
@@ -298,7 +298,7 @@ MEM_LIMIT_GB=24 MEM_PER_WORKER_GB=2 ./build.bash
 ```
 
 > [!WARNING]
-> `start.bash` 当前固定执行 `cd ~/ds_nav`，若工作空间位于其他目录，请先修改该行。脚本还会打开多个 GNOME Terminal、启动 PTP sudo 命令并自动录制 rosbag，更适合实车桌面环境，不适合无界面服务器。
+> `start.bash` 从脚本所在工作区启动，依赖 GNOME Terminal 和 PTP sudo。录包命令默认注释。纯 SSH 使用下方 `scripts/real_robot.bash`。
 
 ## ⚙️ 上车前关键配置
 
@@ -535,6 +535,12 @@ P1 的修改、失败证据和验证范围见 [P1 导航闭环记录](/home/liu/
 及 [P1 后续修复记录](/home/liu/ds_nav_archive/20261110_cleanup/docs/ai_refactor_records/20261101_p1_followup.md)。
 
 
+### 实车接入操作手册
+
+完整步骤见仓库根目录 **[REAL_ROBOT_DEPLOYMENT.md：实车接入与远程调试操作手册](REAL_ROBOT_DEPLOYMENT.md)**。
+
+包括新机依赖与实车构建、雷达设备IP和驱动IP分别如何修改、主IMU话题覆盖、PTP与外参、建图保存、GICP与地图切换、逐段topic/TF检查、远程RViz、底盘接入和避障验收。纯SSH入口为 `scripts/real_robot.bash`；详细步骤统一以该手册为准。
+
 ### 1. 分模块启动（推荐首次上车）
 
 每个终端都先执行：
@@ -550,6 +556,12 @@ source install/setup.bash
 
 ```bash
 ros2 launch point_lio mixed_livox_pointlio_intra_process.launch.py
+```
+
+启动 GICP（先验导航使用，建图时不要启动）：
+
+```bash
+ros2 launch icp_relocalization gicp_relocalization.launch.py
 ```
 
 启动 Nav2、ROGMap、MINCO 与 MPC：
@@ -577,10 +589,12 @@ bash start.bash
 
 1. PTP 时间同步；
 2. 双雷达 + Point-LIO component container；
-3. Nav2 + ROGMap + MincoPlanner + MincoMpcController；
-4. bt_manager；
-5. communication；
-6. 指定 topics 的 rosbag 记录。
+3. GICP 重定位；
+4. 点云过滤 + Nav2 + ROGMap + MincoPlanner + MincoMpcController；
+5. bt_manager；
+6. communication。
+
+录包命令默认注释，需按现场存储与采集要求启用。
 
 `start.bash` 会请求 sudo 并向底盘链路发送控制数据，上车前应架空轮组或保证机械急停可用。
 
@@ -817,7 +831,7 @@ ros2 topic hz /cmd_vel_mpc
 <details>
 <summary><b>启动脚本找不到工作空间或无法在 SSH 中运行</b></summary>
 
-`start.bash` 固定进入 `~/ds_nav` 并依赖 `gnome-terminal`。修改工作空间路径，或按“分模块启动”在当前 shell / tmux 中运行各 launch。
+`start.bash` 依赖 `gnome-terminal`。纯 SSH 使用 `scripts/real_robot.bash`，或在 tmux 中分模块启动。
 
 </details>
 
@@ -825,7 +839,7 @@ ros2 topic hz /cmd_vel_mpc
 
 - 当前配置与 launch 包含实车 IP、雷达外参、地图路径、红蓝方小地图 TF 和赛场初始位姿，尚未抽象成通用硬件 profile。
 - `camera_init → base_link` 平移偏置仍在 Point-LIO 源码中硬编码，车辆几何参数尚未完全统一到 YAML。
-- `start.bash` 假设 GNOME 桌面、固定工作空间路径和可用 sudo，不是通用服务管理器。
+- `start.bash` 假设 GNOME 桌面、可用 sudo，不是通用服务管理器。
 - 仓库包含比赛验证逻辑和实验性模块；`dbscan_cluster`、部分恢复/裁剪分支默认未启用。
 - Planner 为补偿电控速度稳态跟踪误差，在误差门控超限时仍强制使用热启动速度/加速度；热启动位置取 odom，而不是旧轨迹期望位置，P/V/A 边界状态来源不一致。
 - 主 MINCO 优化没有安全走廊硬约束，总代价上限门控当前停用；ESDF/动力学为软代价，发布前采样校验只能拒绝候选，不能阻止极端情况下先产生畸形数值解。

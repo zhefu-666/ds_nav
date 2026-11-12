@@ -65,7 +65,7 @@ target_link_libraries(pcd_sanitize_tool ${PCL_LIBRARIES})
 
 # Install launch config files
 install(
-  DIRECTORY launch config
+  DIRECTORY launch config pcd
   DESTINATION share/${PROJECT_NAME}
 )
 

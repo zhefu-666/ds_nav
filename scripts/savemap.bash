@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+MAP_OUTPUT_DIR="${MAP_OUTPUT_DIR:-$HOME/ds_nav_maps}"
 
 usage() {
   cat <<EOF
@@ -20,6 +19,7 @@ Environment overrides:
   OCC=0.65                 default: 0.65
   FREE=0.25                default: 0.25
   AUTO_SAVE_INTERVAL=60    save repeatedly after this many seconds; unset for one save
+  MAP_OUTPUT_DIR=...       default: $HOME/ds_nav_maps (timestamped checkpoints)
 EOF
 }
 
@@ -58,7 +58,7 @@ save_map() {
     map_name="$REQUESTED_MAP_NAME"
   else
     # map_name="${WORKSPACE_DIR}/src/navigation/navi2_bringup/maps/2026/slam_$(date +%Y%m%d_%H%M%S)"
-    map_name="pgm/slam"
+    map_name="${MAP_OUTPUT_DIR}/slam_$(date +%Y%m%d_%H%M%S)"
   fi
 
   # map_saver_cli expects a path prefix, not a .yaml/.pgm/.png filename.
@@ -68,7 +68,7 @@ save_map() {
   map_name="${map_name%.bmp}"
 
   if [[ "$map_name" != /* ]]; then
-    map_name="${WORKSPACE_DIR}/${map_name}"
+    map_name="${PWD}/${map_name}"
   fi
 
   mkdir -p "$(dirname "$map_name")"
