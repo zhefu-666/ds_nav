@@ -491,3 +491,140 @@ def test_visible_roof_recovery_requires_zero_and_five_new_stable_scans():
                 assert n.x_info['method']=='surveyed_plane'
                 assert n.x_info['wall_x']==2.325
                 assert n.x_velocity==0.
+
+
+def test_transverse_face_remains_observable_beside_dense_horizontal_returns():
+    import pytest
+    y=np.linspace(-.4,.5,13)
+    face=np.column_stack([np.full(len(y),1.214),y,.25+.04*y*y])
+    clutter_y=np.linspace(-.3,-.025,30)
+    horizontal=np.column_stack([1.282+.04*clutter_y**2,clutter_y,np.full(len(clutter_y),.251)])
+    x,count,_=t.fit_end_wall(np.vstack([face,horizontal]),1.3576,-2.5366,2.325,
+                            verify_normal=True,association_window=.6)
+    assert x==pytest.approx(1.111) and count==13
+    with pytest.raises(ValueError,match='ambiguous_clusters'):
+        t.fit_end_wall(np.vstack([face,face+[.068,0,0]]),1.3576,-2.5366,2.325,
+                       verify_normal=True,association_window=.6)
+
+
+def test_longitudinal_confirmation_pause_keeps_prior_lane_alignment(tmp_path,monkeypatch):
+    import types
+    # Exercise the real main loop: initially aligned, zero-command observation
+    # pause, then a fresh pose 6mm off-center. Only the longitudinal confirmation
+    # may retain prior qualification; wall loss must require realignment.
+    cfg=json.loads((t.RESOURCES/'config/model.json').read_text())
+    profile=json.loads((t.RESOURCES/'config/tunnel_profile.json').read_text())
+    lane=4.46+profile['lane_body_center_y_m']
+    for reason,expect_forward in [('longitudinal_reacquisition_pending',True),('side_wall_not_fresh',False),('longitudinal_bridge_exhausted',False)]:
+        class FakePassage:
+            def __init__(self,*args):
+                self.stamp=0.;self.calls=0;self.contacts=[];self.commands=[]
+                self.control="disabled";self.control_received_at=t.time.monotonic()
+                self.joints=joint_positions(cfg,0.,0.,0.,profile['aim_rad'])
+                self.x_info={'method':'surveyed_plane','uncertainty_m':.005}
+                self.wall_velocity=self.x_velocity=0.;self.raw_scan=None;self.cloud_info={}
+                self.wall_fit=(0.,0.,-.32);self.active_wall_y=4.86
+                self.imu_history=[(0.,np.zeros(3))]
+            def get_clock(self):return types.SimpleNamespace(now=lambda:types.SimpleNamespace(nanoseconds=round(self.stamp*1e9)))
+            def pose(self):
+                self.calls+=1
+                if self.calls==3:raise ValueError(reason)
+                if self.calls>=5:raise RuntimeError('test_observation_complete')
+                return np.array([-4.2 if self.calls==1 else -2.5,lane+(.006 if self.calls==4 else 0.),.08]),Rotation.identity(),self.stamp
+            def publish(self,command=None,active=False):self.commands.append((self.calls,command,active))
+            def destroy_node(self):pass
+        node=FakePassage();out=tmp_path/(reason+'.json')
+        monkeypatch.setattr(t,'Passage',lambda *args:node)
+        monkeypatch.setattr(t.rclpy,'init',lambda **kwargs:None)
+        monkeypatch.setattr(t.rclpy,'shutdown',lambda:None)
+        monkeypatch.setattr(t.rclpy,'ok',lambda:True)
+        def spin_once(n,**kwargs):
+            n.stamp+=.051
+            n.control_received_at=t.time.monotonic()
+        monkeypatch.setattr(t.rclpy,'spin_once',spin_once)
+        monkeypatch.setattr(t.signal,'signal',lambda *args:None)
+        monkeypatch.setattr(t.sys,'argv',['sim_tunnel_passage.py','--tunnel','west','--passes','1','--out',str(out)])
+        assert t.main()==1
+        report=json.loads(out.read_text());assert len(report['trace'])==2
+        assert report['cancelled'] is False
+        assert report['sim_cleanup_ns']>report['sim_stop_request_ns']
+        assert report['disabled_confirmed'] is True
+        assert report['trace'][0]['command'][0]>0
+        assert (report['trace'][1]['command'][0]>0)==expect_forward
+        paused=[(command,active) for call,command,active in node.commands if call==3]
+        assert paused and all(command is None and not active for command,active in paused)
+
+
+def test_missing_health_receipt_is_strict_json_null(monkeypatch):
+    import types
+    import pytest
+    monkeypatch.setattr(t.time, 'monotonic', lambda: 10.)
+    node=types.SimpleNamespace(map_ok=True,valid=False,ready=True,odom=object(),
+        valid_at=float('-inf'),ready_at=9.9,odom_at=9.98,joints_at=9.99)
+    with pytest.raises(ValueError,match='localization_posture_or_joint_not_fresh'):
+        t.Passage.pose(node)
+    encoded=json.dumps(node.health_diagnostics,allow_nan=False)
+    assert json.loads(encoded)['receipt_ages_s']['valid'] is None
+    assert abs(node.health_diagnostics['receipt_ages_s']['odom']-.02)<1e-9
+
+
+def test_reaction_interval_cannot_credit_instant_counter_yaw():
+    # Recorded reentry state: yaw rate still positive while the prior command
+    # already asks for negative yaw. Its measured momentum crosses the 8mm
+    # prediction margin before another control interval can take effect.
+    heading=.026831363696323093
+    points,_=geometry(yaw=heading)
+    previous=np.array([.10409802629906967,.050940253204267406,-.13127907943771194])
+    nominal=np.array([.11159802629906967,.062376887763490894,-.1779394082863868])
+    previous=np.array([np.sin(heading)*previous[0]+np.cos(heading)*previous[1],previous[2]])
+    nominal=np.array([np.sin(heading)*nominal[0]+np.cos(heading)*nominal[1],nominal[2]])
+    assert t.constrained_control(points,-.0887634760195195,0.,
+                                 -.014540318587954267,.09959549215522358,
+                                 previous,nominal) is None
+
+
+def test_disabled_confirmation_waits_through_busy_callbacks_and_rejects_old_status(monkeypatch):
+    from types import SimpleNamespace
+    clock = [10.]
+    node = SimpleNamespace(control='disabled', control_received_at=9.9, publishes=0)
+    def publish():
+        node.publishes += 1
+    node.publish = publish
+    callbacks = [0]
+    def spin(node, timeout_sec):
+        callbacks[0] += 1
+        clock[0] += .001  # IMU callbacks do not wait for timeout_sec.
+        if callbacks[0] == 40:
+            node.control = 'disabled'
+            node.control_received_at = clock[0]
+    monkeypatch.setattr(t.time, 'monotonic', lambda:clock[0])
+    monkeypatch.setattr(t.rclpy, 'ok', lambda:True)
+    monkeypatch.setattr(t.rclpy, 'spin_once', spin)
+    assert t.confirm_disabled(node, timeout=.5)
+    assert callbacks[0] == 40 and node.publishes >= 1
+
+
+def test_disabled_confirmation_fails_on_absent_or_active_status_even_if_clock_paused(monkeypatch):
+    from types import SimpleNamespace
+    for control in ['disabled', 'active']:
+        clock = [10.]
+        node = SimpleNamespace(control=control, control_received_at=9.9, publishes=0)
+        node.publish = lambda:setattr(node, 'publishes', node.publishes+1)
+        monkeypatch.setattr(t.time, 'monotonic', lambda:clock[0])
+        monkeypatch.setattr(t.rclpy, 'ok', lambda:True)
+        def spin(node, timeout_sec):
+            clock[0] += .01
+            if control == 'active':
+                node.control_received_at = clock[0]
+        monkeypatch.setattr(t.rclpy, 'spin_once', spin)
+        assert not t.confirm_disabled(node, timeout=.35)
+        assert 10.35 <= clock[0] < 10.37 and node.publishes >= 3
+
+
+def test_recorded_momentum_needs_brake_before_clearance_collapse():
+    # Recorded state at sim 88.931: the old one-step coast check accepted it,
+    # but zero commands at 89.437 came too late to preserve the 2 mm limit.
+    points,_=geometry(yaw=0.015822393075285095)
+    previous=np.array([-0.039791774719730874, -0.15092866539354044])
+    assert t.constrained_control(points,-2.5296536744150253,-2.46,
+        0.004992143732338471,0.1123452351175633,previous,previous) is None

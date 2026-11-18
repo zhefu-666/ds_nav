@@ -24,12 +24,17 @@ def generate_launch_description():
             'publish_area_markers',
             default_value='true',
             description='Whether to publish area markers for visualization'),
+        DeclareLaunchArgument(
+            'rmul_status_only',
+            default_value='false',
+            description='Subscribe to RMUL V1 status without running competition trees'),
         Node(
             package='bt_manager',
             executable='bt_manager_node',
             name='bt_manager_node',
             output='screen',
             parameters=[{
+                'rmul_status_only': ParameterValue(LaunchConfiguration('rmul_status_only'), value_type=bool),
                 'bt_debug_logs': ParameterValue(LaunchConfiguration('bt_debug_logs'), value_type=bool),
                 'bt_debug_log_to_file': ParameterValue(
                     LaunchConfiguration('bt_debug_log_to_file'), value_type=bool),

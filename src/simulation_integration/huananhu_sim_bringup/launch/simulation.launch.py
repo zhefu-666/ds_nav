@@ -33,6 +33,13 @@ def generate_launch_description():
     res_share = get_package_share_directory("huananhu_sim_resources")
     defaults = json.loads((Path(sim_share) / "config/simulation_defaults.json").read_text())
 
+    # Render only Gazebo/RViz on NVIDIA; algorithm processes retain their CPU environment.
+    render_env = {
+        "__NV_PRIME_RENDER_OFFLOAD": "1",
+        "__GLX_VENDOR_LIBRARY_NAME": "nvidia",
+        "__VK_LAYER_NV_optimus": "NVIDIA_only",
+    }
+
     scene = LaunchConfiguration("scene")
     world_sdf = PathJoinSubstitution([res_share, "worlds", [scene, "_world.sdf"]])
     gui_config = os.path.join(res_share, "ign", "gui.config")
@@ -83,8 +90,8 @@ def generate_launch_description():
                 raise ValueError('render_engine_library requires ogre and an existing absolute library path')
             engine = str(library.resolve())
         factor = float(LaunchConfiguration('real_time_factor').perform(context))
-        if not 0 < factor <= 1:
-            raise ValueError('real_time_factor must be in (0,1]')
+        if not 0 < factor <= 2:
+            raise ValueError('real_time_factor must be in (0,2]')
         sdf_path = world_sdf.perform(context)
         cleanup = []
         if engine != 'ogre2' or factor != 1.0:
@@ -113,7 +120,7 @@ def generate_launch_description():
         upstream = runpy.run_path(os.path.join(
             get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'))
         model_paths, plugin_paths = upstream['GazeboRosPaths'].get_paths()
-        gazebo_env = {}
+        gazebo_env = dict(render_env)
         for name in ('GZ_SIM_SYSTEM_PLUGIN_PATH', 'IGN_GAZEBO_SYSTEM_PLUGIN_PATH'):
             gazebo_env[name] = os.pathsep.join([
                 os.environ.get(name, ''), os.environ.get('LD_LIBRARY_PATH', ''), plugin_paths])
@@ -157,9 +164,9 @@ def generate_launch_description():
                 "sampling_mode": LaunchConfiguration("sampling_mode"),
                 "input_topic": "/lidar/points",
                 "output_topic": "/livox/lidar",
-                "scan_lines": 16,
-                "vertical_min_angle": -0.610865,
-                "vertical_max_angle": 0.610865,
+                "scan_lines": 32,
+                "vertical_min_angle": -0.12217304764,
+                "vertical_max_angle": 0.90757121104,
                 "micro_publish_mode": LaunchConfiguration("micro_publish_mode"),
                 "micro_batches": LaunchConfiguration("micro_batches"),
                 "self_filter": ParameterValue(PythonExpression([
@@ -255,7 +262,8 @@ def generate_launch_description():
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
-        arguments=["-d", os.path.join(sim_share, "rviz", "sim.rviz")],
+        additional_env=render_env,
+        arguments=["-d", PathJoinSubstitution([sim_share, "rviz", LaunchConfiguration("rviz_config")])],
         parameters=[{"use_sim_time": True}],
         condition=IfCondition(rviz),
         output="screen",
@@ -353,6 +361,9 @@ def generate_launch_description():
             DeclareLaunchArgument('saved_map_manifest', default_value=''),
             DeclareLaunchArgument('initial_imu_pose', default_value=''),
             DeclareLaunchArgument("rviz", default_value="false"),
+            DeclareLaunchArgument("rviz_config", default_value="sim.rviz",
+                                  choices=["sim.rviz", "raw_lidar.rviz"],
+                                  description="Navigation view or raw sensor view independent of localization TF"),
             DeclareLaunchArgument(
                 "robot_model",
                 default_value="huananhu",

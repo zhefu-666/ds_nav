@@ -25,7 +25,7 @@ from tf2_ros import TransformException
 from geometry_msgs.msg import Twist
 from sim_tunnel_passage import (Passage, ROOT, RESOURCES, envelope, passage_margin,
                                 fit_wall, lateral_kalman, limit_velocity,
-                                interpolated_command,observed_floor_base_z)
+                                interpolated_command,observed_floor_base_z,confirm_disabled)
 
 
 def route(start, goal, requested='auto'):
@@ -187,7 +187,11 @@ def transfer(tunnel,target,out,stopping):
     result=dict(completed=False,truth_used_for_control=False,target=target,trace=[],failure=None)
     previous=np.zeros(3);ramp=np.zeros(3);last=-math.inf;settled=None;begin=time.monotonic();ready=False;ever_ready=False;missing_since=None
     try:
-        while not stopping() and time.monotonic()-begin<240:
+        # This is a wall-time execution cap, not a motion/acceptance tolerance.
+        # Slow headless simulation must still finish the unchanged measured
+        # 10mm alignment and .75 simulated-second rest window. Match passage's
+        # bounded 600s cap; stale sensors and cancellation still stop immediately.
+        while not stopping() and time.monotonic()-begin<600:
             rclpy.spin_once(node,timeout_sec=.01)
             if node.contacts:raise ValueError('body_contact_stop')
             stamp=node.get_clock().now().nanoseconds*1e-9
@@ -244,7 +248,12 @@ def transfer(tunnel,target,out,stopping):
         if not result['completed']:raise ValueError('portal_transfer_timeout_or_interrupted')
     except Exception as exc:result['failure']=str(exc)
     finally:
-        for _ in range(10):node.publish();rclpy.spin_once(node,timeout_sec=.01)
+        result['sim_stop_request_ns']=node.get_clock().now().nanoseconds
+        result['disabled_confirmed']=confirm_disabled(node)
+        result['sim_cleanup_ns']=node.get_clock().now().nanoseconds
+        if not result['disabled_confirmed']:
+            result['completed']=False
+            result['failure']=result['failure'] or 'disabled_confirmation_timeout'
         if node.raw_scan is not None:np.savez_compressed(out.with_suffix('.scan.npz'),stamp=node.raw_scan[0],points=node.raw_scan[1])
         node.destroy_node();out.write_text(json.dumps(result,indent=2))
     return result['completed']
@@ -324,13 +333,18 @@ def relocalize(departure,out,stopping):
             mode.publish(String(data='disabled'));rclpy.spin_once(node,timeout_sec=.02)
             if predicate():return True
         return False
-    def call(client,request):
+    def call(client,request,attempts=1):
         if not wait(client.service_is_ready,10):raise ValueError('relocalization_service_unavailable')
-        future=client.call_async(request)
-        if not wait(future.done,10):raise ValueError('relocalization_service_timeout')
-        return future.result()
+        for attempt in range(attempts):
+            future=client.call_async(request)
+            if wait(future.done,10):return future.result()
+            client.remove_pending_request(future);future.cancel()
+            report.setdefault('service_timeouts',[]).append(
+                dict(service=client.srv_name,attempt=attempt+1))
+            if stopping() or attempt+1==attempts:
+                raise ValueError('relocalization_service_timeout')
     try:
-        req=GetParameters.Request();req.names=['initial_pose','recall_use_parameter_seed'];old=call(get,req)
+        req=GetParameters.Request();req.names=['initial_pose','recall_use_parameter_seed'];old=call(get,req,attempts=2)
         if len(old.values)!=2 or not old.values[1].bool_value:raise ValueError('seeded_recall_not_enabled')
         original=old.values[0];seed=relocalization_seed(departure['observed_pose'],departure['lio_pose']);report['seed']=seed
         req=SetParameters.Request();req.parameters=[Parameter('initial_pose',value=seed).to_parameter_msg()]
@@ -404,6 +418,10 @@ def main():
         result['stages'].append({'stage':label,'exit_code':code})
         if stopping():raise ValueError('mission_interrupted')
         if code:raise ValueError(label+'_failed')
+        if label=='passage':
+            stage=json.loads((args.out/'passage.json').read_text())
+            if stage.get('completed') is not True or stage.get('disabled_confirmed') is not True:
+                raise ValueError('passage_stop_not_confirmed')
     def nav(label,goal):run(label,['scripts/sim_nav_trial.py','--goal',*map(str,goal),'--goal-timeout','300','--out',str(args.out/(label+'.json'))])
     try:
         # Bootstrap with the standard trial observer, without publishing a mode.

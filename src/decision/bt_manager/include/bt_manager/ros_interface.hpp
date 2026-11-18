@@ -9,6 +9,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 
 #include <array>
+#include <chrono>
 #include <memory>
 #include <mutex>
 
@@ -17,6 +18,7 @@
 #include "ros_interfaces/msg/game_info.hpp"
 #include "ros_interfaces/msg/mpc_position_command.hpp"
 #include "ros_interfaces/msg/radar_info.hpp"
+#include "ros_interfaces/msg/rmul_status.hpp"
 #include "ros_interfaces/msg/sentry_info_offline.hpp"
 #include "ros_interfaces/msg/sentry_info_online.hpp"
 #include "ros_interfaces/msg/team_information.hpp"
@@ -29,9 +31,17 @@
 #include "bt_manager/utils/nav_zone.hpp"
 #include "bt_manager/utils/tf_utils.hpp"
 namespace Sentry_BT {
+
+struct RmulStatusSnapshot
+{
+  ros_interfaces::msg::RmulStatus status;
+  std::chrono::steady_clock::time_point received_at;
+};
+
 class ros_interface : public rclcpp::Node
 {
 private:
+  rclcpp::Subscription<ros_interfaces::msg::RmulStatus>::SharedPtr rmul_status_sub;
   rclcpp::Subscription<ros_interfaces::msg::TeamInformation>::SharedPtr team_info_sub;
   rclcpp::Subscription<ros_interfaces::msg::GameInfo>::SharedPtr game_info_sub;
   rclcpp::Subscription<ros_interfaces::msg::RadarInfo>::SharedPtr radar_info_sub;
@@ -63,6 +73,7 @@ private:
   bool active_tunnel_entered_{false};
 
   // 回调函数声明
+  void rmulStatusCallback(const ros_interfaces::msg::RmulStatus & msg);
   void teamInfoCallback(const ros_interfaces::msg::TeamInformation::SharedPtr msg);
   void gameInfoCallback(const ros_interfaces::msg::GameInfo::SharedPtr msg);
   void radarInfoCallback(const ros_interfaces::msg::RadarInfo::SharedPtr msg);

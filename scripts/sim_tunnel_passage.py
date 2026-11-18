@@ -139,7 +139,8 @@ def constrained_control(points, y, center_y, velocity, omega, previous, nominal,
 
     Enumerate bounded lateral/yaw controls including the nominal proposal.
     The first prediction step retains the old input to cover interpolation and
-    actuation delay. An infeasible sweep requests an immediate disabled brake.
+    actuation delay. A separate coast check covers measured momentum during
+    that interval. An infeasible sweep requests an immediate disabled brake.
     """
     lower=np.maximum([-.08,-.25],previous-np.array([.60,1.5])*dt)
     upper=np.minimum([.08,.25],previous+np.array([.60,1.5])*dt)
@@ -152,6 +153,15 @@ def constrained_control(points, y, center_y, velocity, omega, previous, nominal,
     py=np.full(len(candidates),y);vy=np.full(len(candidates),velocity)
     theta=np.zeros(len(candidates));w=np.full(len(candidates),omega)
     feasible=np.ones(len(candidates),dtype=bool)
+    # Cover measured momentum throughout the same 0.3 s prediction horizon.
+    # A one-step coast check allowed a late brake when roller/PI response took
+    # several steps to shed lateral/yaw momentum. Do not credit unconfirmed
+    # deceleration with clearance that has not actually been observed yet.
+    for step in range(1,7):
+        elapsed=step*dt
+        coast_y=y+elapsed*velocity+math.cos(elapsed*omega)*polygon[:,1]+math.sin(elapsed*omega)*polygon[:,0]
+        if coast_y.min()<lo-1e-7 or coast_y.max()>hi+1e-7:
+            return None
     for step in range(6):
         control=previous[None,:] if step==0 else candidates
         vy=.98*vy+.30*control[:,0]
@@ -180,25 +190,42 @@ def fit_end_wall(points, seed_x, y, wall_x, verify_normal=False, association_win
         raise ValueError('end_wall_not_observable')
     order=np.argsort(selected[:,0]);a=selected[order]
     right=np.searchsorted(a[:,0],a[:,0]+.006,side='right')
-    left=int(np.argmax(right-np.arange(len(a))));inliers=a[left:right[left]]
-    # A high transverse line still observes X when the 16-line scanner sees
-    # only one elevation row. Low/floor-only rings remain unobservable.
-    vertical_support=len(inliers)>=4 and np.ptp(inliers[:,1])>=.03 and np.ptp(inliers[:,2])>=.08
-    high_line=len(inliers)>=6 and np.ptp(inliers[:,1])>=.15 and inliers[:,2].min()>.22
-    if not (vertical_support or high_line):
-        raise ValueError('end_wall_not_observable')
-    alternatives=(right-np.arange(len(a))>=max(4,.8*len(inliers))) & (np.abs(a[:,0]-np.median(inliers[:,0]))>.02)
-    if alternatives.any():
-        raise ValueError('end_wall_ambiguous_clusters')
-    if verify_normal:
-        # A horizontal roof can produce an X-dense arc in one elevation row.
-        # Its adjacent returns extend along X and have a Z-normal; a real
-        # transverse face has an X-normal. Include neighbors outside the
-        # winning 6mm bin so the bin itself cannot manufacture a plane.
-        neighbors=selected[np.abs(selected[:,0]-np.median(inliers[:,0]))<.08]
-        values,vectors=np.linalg.eigh(np.cov(neighbors.T))
-        if values[1]<2e-7 or values[1]<5*max(values[0],1e-12) or abs(vectors[0,0])<.9:
+    if not verify_normal:
+        left=int(np.argmax(right-np.arange(len(a))));inliers=a[left:right[left]]
+        # A high transverse line still observes X when the 16-line scanner sees
+        # only one elevation row. Low/floor-only rings remain unobservable.
+        vertical_support=len(inliers)>=4 and np.ptp(inliers[:,1])>=.03 and np.ptp(inliers[:,2])>=.08
+        high_line=len(inliers)>=6 and np.ptp(inliers[:,1])>=.15 and inliers[:,2].min()>.22
+        if not (vertical_support or high_line):
+            raise ValueError('end_wall_not_observable')
+        alternatives=(right-np.arange(len(a))>=max(4,.8*len(inliers))) & (np.abs(a[:,0]-np.median(inliers[:,0]))>.02)
+        if alternatives.any():
+            raise ValueError('end_wall_ambiguous_clusters')
+    else:
+        sizes=right-np.arange(len(a))
+        candidates=[]
+        examined=[]
+        for left in np.argsort(sizes)[::-1]:
+            inliers=a[left:right[left]]
+            vertical_support=len(inliers)>=4 and np.ptp(inliers[:,1])>=.03 and np.ptp(inliers[:,2])>=.08
+            high_line=len(inliers)>=6 and np.ptp(inliers[:,1])>=.15 and inliers[:,2].min()>.22
+            if not (vertical_support or high_line):continue
+            center=float(np.median(inliers[:,0]))
+            if any(abs(center-other)<=.02 for other in examined):continue
+            examined.append(center)
+            # Fit each distinct cluster before comparing their support. A
+            # different surface beyond the existing 20mm ambiguity separation
+            # cannot supply or destroy this candidate's observable normal.
+            neighbors=selected[np.abs(selected[:,0]-center)<.02]
+            values,vectors=np.linalg.eigh(np.cov(neighbors.T))
+            if values[1]<2e-7 or values[1]<5*max(values[0],1e-12) or abs(vectors[0,0])<.9:
+                continue
+            candidates.append((center,inliers))
+        if not candidates:
             raise ValueError('transverse_face_normal_unobservable')
+        _,inliers=candidates[0]
+        if any(len(other)>=max(4,.8*len(inliers)) for _,other in candidates[1:]):
+            raise ValueError('end_wall_ambiguous_clusters')
     x=wall_x-float(np.median(inliers[:,0]))
     if abs(x-seed_x)>association_window:
         raise ValueError('end_wall_association_out_of_bounds')
@@ -311,6 +338,7 @@ class Passage(rclpy.node.Node):
         self.map_shape, self.map_meta = (width, height), meta
         self.map_hash = hashlib.sha256(cells.tobytes()).hexdigest()
         self.control = ''
+        self.control_received_at = 0.
         self.tf = Buffer()
         self.listener = TransformListener(self.tf, self)
         self.cmd = self.create_publisher(Twist, '/sim/manual_cmd_vel', 10)
@@ -491,6 +519,7 @@ class Passage(rclpy.node.Node):
 
     def on_control(self, msg):
         self.control = msg.data
+        self.control_received_at = time.monotonic()
 
     def on_odom(self, msg):
         self.odom, self.odom_at = msg, time.monotonic()
@@ -505,6 +534,7 @@ class Passage(rclpy.node.Node):
         now = time.monotonic()
         if (not self.map_ok or not self.valid or not self.ready or self.odom is None or
                 any(now - t > .5 for t in [self.valid_at, self.ready_at, self.odom_at, self.joints_at])):
+            self.health_diagnostics=dict(map_ok=self.map_ok,localization_valid=self.valid,posture_ready=self.ready,odom_present=self.odom is not None,receipt_ages_s={key:float(now-value) if math.isfinite(value) else None for key,value in [('valid',self.valid_at),('posture',self.ready_at),('odom',self.odom_at),('joint',self.joints_at)]})
             raise ValueError('localization_posture_or_joint_not_fresh')
         m = self.odom
         if m.header.frame_id != 'camera_init' or m.child_frame_id != 'base_footprint':
@@ -562,17 +592,28 @@ class Passage(rclpy.node.Node):
                 except ValueError:floor_base_z=None
                 accepted=None
                 reacquiring=False
+                self.x_diagnostics=dict(scan_stamp=scan_stamp,seed_x=float(seed_x),
+                    relative_x=None if relative_x is None else float(relative_x),
+                    rotation_xyzw=scan_rotation.as_quat().tolist(),floor_base_z=floor_base_z,
+                    last_fix=self.x_fix,zero_requested=self.zero_requested,attempts=[])
                 for plane in sorted(self.x_planes,key=lambda x:(abs(abs(x)-6.)>1e-6,abs(x-seed_x))):
                     roof_recovered=False
+                    attempt=dict(plane=plane)
+                    self.x_diagnostics['attempts'].append(attempt)
                     try:
-                        if abs(abs(plane)-6.)>1e-6 and floor_base_z is None:continue
+                        if abs(abs(plane)-6.)>1e-6 and floor_base_z is None:
+                            attempt['rejected']='floor_not_observable'
+                            continue
                         face=landmark_points(world_axes,plane,-2.5 if self.wall_side<0 else 2.5,position[1],floor_base_z if floor_base_z is not None else position[2])
                         field=abs(abs(plane)-6.)<1e-6
                         roof=abs(abs(plane-(-2.5 if self.wall_side<0 else 2.5))-.175)<1e-6
                         window=.6 if field or (roof and self.zero_requested and relative_x is not None) else .25
                         x,count,residual=fit_end_wall(face,seed_x,position[1],plane,verify_normal=True,association_window=window)
+                        attempt.update(x=x,count=count,residual_m=residual,window_m=window)
                         if relative_x is not None and abs(x-relative_x)>.02+self.x_info.get('uncertainty_m',.005):
-                            if not (field or roof) or count<12:continue
+                            if not (field or roof) or count<12:
+                                attempt['rejected']='jump_requires_supported_absolute_face'
+                                continue
                             self.pending_absolute,confirmed=confirm_absolute_fix(
                                 self.pending_absolute,plane,scan_stamp,x)
                             if roof:
@@ -584,16 +625,23 @@ class Passage(rclpy.node.Node):
                                            np.linalg.norm(self.imu_history[-1][1])<.003)
                             if (not confirmed or abs(self.wall_velocity)>.01 or
                                 abs(self.imu_history[-1][1][2])>.02):
+                                attempt.update(rejected='absolute_confirmation_pending',
+                                    confirmation_samples=list(self.pending_absolute[1]),
+                                    wall_velocity=float(self.wall_velocity),
+                                    gyro=self.imu_history[-1][1].tolist())
                                 reacquiring=True
                                 break
                             roof_recovered=roof
                         if self.x_fix is not None:
                             elapsed=scan_stamp-self.x_fix[0]
                             if abs(x-self.x_fix[1])>.015+.3*elapsed:
+                                attempt['rejected']='absolute_velocity_discontinuity'
                                 continue
+                        attempt['accepted']=True
                         accepted=(x,count,residual,plane)
                         break
-                    except ValueError:
+                    except ValueError as exc:
+                        attempt['rejected']=str(exc)
                         continue
                 if reacquiring:
                     raise ValueError('longitudinal_reacquisition_pending')
@@ -633,6 +681,29 @@ class Passage(rclpy.node.Node):
         self.posture.publish(String(data='tunnel'))
         self.mode.publish(String(data='manual' if active else 'disabled'))
         self.cmd.publish(command if command is not None else Twist())
+
+
+def confirm_disabled(node, timeout=3.):
+    """Publish zero/disabled until a fresh post-request status is received.
+
+    Wall time bounds cleanup even with a paused simulation clock. Callback
+    count cannot bound this wait: queued IMU/cloud callbacks return immediately.
+    """
+    requested = time.monotonic()
+    deadline = requested + timeout
+    last_publish = -math.inf
+    while rclpy.ok() and time.monotonic() < deadline:
+        now = time.monotonic()
+        if now-last_publish >= .1:
+            node.publish()
+            last_publish = now
+        rclpy.spin_once(node, timeout_sec=.02)
+        now = time.monotonic()
+        if (node.control == 'disabled' and
+                requested <= node.control_received_at <= now and
+                now-node.control_received_at <= .5):
+            return True
+    return False
 
 
 def main():
@@ -727,11 +798,22 @@ def main():
                         raise
                     # A dropped scan stops motion; only recomputed controls may
                     # resume after fresh wall data and a new lane alignment.
-                    if str(exc)!=last_hold:
-                        holds.append(dict(stamp=stamp,reason=str(exc)))
-                    last_hold=str(exc)
                     node.publish()
-                    last_control, last_command, aligned = stamp, Twist(), False
+                    if str(exc)!=last_hold:
+                        hold=dict(stamp=stamp,reason=str(exc),longitudinal=getattr(node,'x_diagnostics',None))
+                        if node.raw_scan is not None and len(holds)<20:
+                            snapshot=args.out.with_name(args.out.stem+'.hold_%03d.npz'%len(holds))
+                            np.savez_compressed(snapshot,stamp=node.raw_scan[0],points=node.raw_scan[1])
+                            hold['scan_snapshot']=str(snapshot)
+                        holds.append(hold)
+                    last_hold=str(exc)
+                    # A zero-command longitudinal confirmation does not revoke
+                    # an already measured lane alignment. Wall/gyro loss and
+                    # bridge exhaustion still require fresh alignment; a brake
+                    # below also clears it independently.
+                    if str(exc)!='longitudinal_reacquisition_pending':
+                        aligned=False
+                    last_control, last_command = stamp, Twist()
                     last_active = False
                     ramp_start=np.zeros(3)
                     ramp_target=np.zeros(3)
@@ -778,7 +860,10 @@ def main():
                 limited=limit_velocity(prior,target_velocity,.05 if previous is None else min(dt,.05))
                 command.linear.x,command.linear.y,command.angular.z=map(float,limited)
                 brake_active=stamp<brake_until
-                if in_corridor and not brake_active:
+                # Enforce the narrow lane from the aligned staging pose onward.
+                # Relative LIO X can stall before landmark reacquisition; using
+                # that X to enable lateral safety can activate it too late.
+                if not brake_active:
                     previous_control=np.array([math.sin(yaw)*prior[0]+math.cos(yaw)*prior[1],prior[2]])
                     nominal=np.array([math.sin(yaw)*limited[0]+math.cos(yaw)*limited[1],limited[2]])
                     safe=constrained_control(points,position[1],cy,node.wall_velocity,
@@ -839,13 +924,20 @@ def main():
     except Exception as exc:
         result['failure'] = type(exc).__name__ + ':' + str(exc)
     finally:
-        node.publish()
-        for _ in range(10):
-            node.publish()
-            rclpy.spin_once(node, timeout_sec=.02)
+        # Record the actual stop/cleanup boundary; estimator trace samples are
+        # not cancellation timestamps and may share a clock tick with commands.
+        result['cancelled'] = stopping
+        result['sim_stop_request_ns'] = node.get_clock().now().nanoseconds
+        result['disabled_confirmed'] = confirm_disabled(node)
+        result['sim_cleanup_ns'] = node.get_clock().now().nanoseconds
+        if not result['disabled_confirmed']:
+            result['completed'] = False
+            result['failure'] = result['failure'] or 'disabled_confirmation_timeout'
         result['body_contacts'] = node.contacts
         result['last_cloud_fit'] = node.cloud_info
         result['last_longitudinal_fix'] = node.x_info
+        result['last_longitudinal_diagnostics'] = getattr(node,'x_diagnostics',None)
+        result['last_health_rejection'] = getattr(node,'health_diagnostics',None)
         result['trace'] = trace
         result['sensor_holds'] = holds
         result['predictive_safety_brakes'] = safety_brakes
@@ -856,7 +948,7 @@ def main():
         node.destroy_node()
         rclpy.shutdown()
     print(json.dumps({k:v for k,v in result.items() if k!='trace'}), flush=True)
-    return 0 if result['completed'] else 1
+    return 0 if result['completed'] and result['disabled_confirmed'] else 1
 
 
 if __name__ == '__main__':

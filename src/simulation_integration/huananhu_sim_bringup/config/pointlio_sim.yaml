@@ -42,7 +42,7 @@
             # 1 = Livox CustomMsg. /livox/lidar in simulation is produced by
             # huananhu_sim_bridge from the Fortress gpu_lidar frame.
             lidar_type: 1
-            scan_line: 16
+            scan_line: 32
             timestamp_unit: 3
             blind: 0.20
             blind_center_enable: False

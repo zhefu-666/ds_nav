@@ -6,7 +6,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'src/simulation_integration/huananhu_sim_bridge/scripts'))
-from cad_self_filter import CadSelfFilter
+from cad_self_filter import CadSelfFilter, triangle_bounds_tree
 
 
 class WheelFilterTests(unittest.TestCase):
@@ -40,10 +40,22 @@ class WheelFilterTests(unittest.TestCase):
         f.poses = lambda _: {'yaw1':np.eye(4), 'part':np.eye(4)}
         f.visuals = {'part':(triangles,cKDTree(triangles.mean(1)),triangles.min((0,1)),triangles.max((0,1)))}
         f.visual_bounds = {'part':(triangles.min(1),triangles.max(1))}
+        f.visual_bvh = {'part':triangle_bounds_tree(triangles)}
         radius = float(np.linalg.norm(triangles-triangles.mean(1)[:,None,:],axis=2).max())
         f.visual_trees = {'part':[(radius,np.arange(len(triangles)),cKDTree(triangles.mean(1)))]}
         hits, _ = f.classify(np.array([[.001,.001,0.],[.001,.001,.004]]), {})
         self.assertEqual(hits.tolist(), [True, False])
+        # Include a point inside the link box but outside all sphere queries,
+        # and points immediately on either side of the 1 mm surface band.
+        xyz = np.array([[.001,.001,0.], [.001,.001,.004], [1.9,1.9,.004],
+                        [.001,.001,.0009], [.001,.001,.0011]])
+        rays = np.arange(len(xyz))
+        hits, _ = f.classify(xyz, {}, ray_ids=rays)
+        self.assertEqual(hits.tolist(), [True, False, False, True, False])
+        # A cached surface match must be rechecked when the return changes.
+        xyz[0, 2] = .004
+        hits, _ = f.classify(xyz, {}, ray_ids=rays)
+        self.assertEqual(hits.tolist(), [False, False, False, True, False])
 
     def test_missing_wheel_measurement_rejected(self):
         q = dict.fromkeys(self.filter.required, 0.)

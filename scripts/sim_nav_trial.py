@@ -29,12 +29,15 @@ class Trial(Node):
         self.valid_at = -math.inf
         self.control = ''
         self.control_at = -math.inf
+        self.localization_status = ''
+        self.localization_status_at = -math.inf
         self.posture_ready = False
         self.posture_at = -math.inf
         self.mode = self.create_publisher(String, '/sim/control_mode', 10)
         self.posture = self.create_publisher(String, '/huananhu/posture', 10)
         self.create_subscription(Bool, '/sim/localization_valid', self.on_valid, 10)
         self.create_subscription(String, '/sim/control_status', self.on_control, 10)
+        self.create_subscription(String, '/sim/localization_status', self.on_localization_status, 10)
         self.create_subscription(Bool, '/sim/posture_ready', self.on_posture, 10)
         self.client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.lifecycle = self.create_client(GetState, '/bt_navigator/get_state')
@@ -66,6 +69,10 @@ class Trial(Node):
     def on_control(self, msg):
         self.control = msg.data
         self.control_at = time.monotonic()
+
+    def on_localization_status(self, msg):
+        self.localization_status = msg.data
+        self.localization_status_at = time.monotonic()
 
     def on_posture(self, msg):
         self.posture_ready = msg.data
@@ -152,11 +159,25 @@ def main():
                     'sim_begin_ns':node.get_clock().now().nanoseconds}
             result['goals'].append(item)
             begin, invalid_since = time.monotonic(), None
+            previous_clock_ns = node.get_clock().now().nanoseconds
             while not future.done() and time.monotonic()-begin < args.goal_timeout:
                 node.wait(lambda:future.done(), .1, mode='auto')
+                clock_ns = node.get_clock().now().nanoseconds
+                if clock_ns < previous_clock_ns:
+                    raise RuntimeError('clock_reset_during_goal')
+                paused = (clock_ns == previous_clock_ns and
+                          node.localization_status == 'simulation_clock_paused' and
+                          time.monotonic()-node.localization_status_at < .5)
+                previous_clock_ns = clock_ns
                 if args.cancel_after is not None and time.monotonic()-begin >= args.cancel_after:
                     raise RuntimeError('requested_cancel_test')
-                if not node.healthy():
+                if paused:
+                    # The existing gate already holds zero while the simulator
+                    # is paused. Retain the action, with its wall timeout and
+                    # explicit cancellation still enforced; never clear a real
+                    # estimator loss or accept a stale pause status.
+                    invalid_since = None
+                elif not node.healthy():
                     invalid_since = invalid_since or time.monotonic()
                     if time.monotonic()-invalid_since > .5:
                         raise RuntimeError('localization_invalid_during_goal')

@@ -577,6 +577,35 @@ ros2 launch bt_manager bt_manager.launch.py
 ros2 launch communication com.launch.py
 ```
 
+### RMUL V1 实车通信与决策输入
+
+Point-LIO 已运行，构建后的工作区已载入。使用 SSH 实车入口显式选择 RMUL V1，并另开终端启动 RMUL 决策状态订阅。
+
+```bash
+NAV_SERIAL=rmul_v1 NAV_SERIAL_PORT=/dev/ttyACM0 bash scripts/real_robot.bash navigation
+ros2 launch bt_manager bt_manager.launch.py rmul_status_only:=true
+```
+
+```text
+Point-LIO / GICP → Nav2 / MINCO MPC → /cmd_vel_mpc
+                                           ↓
+STM32 ← 0x6E（16 字节） ← basic_nav_serial（RMUL V1）
+STM32 → 0x6D（21 字节） → basic_nav_serial（校验 CRC）
+                                           ↓
+                               /sentry/rmul_status
+                                           ↓
+                             bt_manager 决策状态快照
+```
+
+| 层 | 代码 | 当前职责 |
+|---|---|---|
+| 实车入口 | [scripts/real_robot.bash](scripts/real_robot.bash) | 启动定位、点云过滤和 Nav2；设置 `NAV_SERIAL=rmul_v1` 时再启动串口。 |
+| 串口协议 | [RMUL 串口文档](src/navigation/communication/RMUL_SERIAL_INTERFACE.md) · [通信实现](src/navigation/communication/src/basic_nav_serial.cpp) | 发送速度和升降目标，接收比赛及升降状态。固定零航向联调时角速度为零。 |
+| ROS 状态 | [RmulStatus.msg](src/ros_interfaces/msg/RmulStatus.msg) | 用 `/sentry/rmul_status` 携带一帧完整状态，包括阶段、血量、底盘供电、控制区、RFID、双方控制度和升降位置。 |
+| 决策输入 | [ros_interface.cpp](src/decision/bt_manager/src/ros_interface.cpp) · [main.cpp](src/decision/bt_manager/src/main.cpp) | 在 `rmul_status_only:=true` 时更新黑板的 `rmul_status_snapshot`，整包与单调接收时刻一起写入，收到第一帧前接收时刻为零。该模式只运行状态订阅。 |
+
+当前可用 `ros2 topic info -v /sentry/rmul_status` 检查订阅者，用 `ros2 topic echo /sentry/rmul_status` 核对实际回传。下一步是由 RMUL 行为树消费状态快照并处理失效、阶段切换和升降反馈；完整的过洞动作仍需要航向对齐来源。当前决策订阅模式只缓存输入，比赛行为树和决策命令输出待接入。
+
 ### 2. 一键实车启动
 
 完成所有标定并确认急停链路后：

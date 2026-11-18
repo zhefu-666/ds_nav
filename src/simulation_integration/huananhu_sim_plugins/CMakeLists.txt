@@ -19,7 +19,12 @@ target_link_libraries(WheelTractionDrive
   ignition-gazebo${IGN_GAZEBO_VER}::ignition-gazebo${IGN_GAZEBO_VER}
 )
 
-install(TARGETS MecanumDrive2 WheelTractionDrive DESTINATION plugins)
+add_library(BodyContactEvidence SHARED plugins/BodyContactEvidence.cc)
+target_link_libraries(BodyContactEvidence
+  ignition-gazebo${IGN_GAZEBO_VER}::ignition-gazebo${IGN_GAZEBO_VER}
+)
+
+install(TARGETS MecanumDrive2 WheelTractionDrive BodyContactEvidence DESTINATION plugins)
 
 ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/env-hooks/gazebo.dsv.in")
 

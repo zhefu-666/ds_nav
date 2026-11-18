@@ -104,6 +104,8 @@ def compose(share, carrier_xml, robot_name):
         chassis.remove(sensor)
         sensor.find('pose').text = '.0557597190051302 .106643863403111 .163594690492484 -1.5707963267948966 0 0'
         yaw1.append(sensor)
+    ET.SubElement(model, 'plugin', filename='libBodyContactEvidence.so',
+                  name='kaohe::BodyContactEvidence')
     return ET.tostring(root, encoding='unicode'), carrier_only
 
 

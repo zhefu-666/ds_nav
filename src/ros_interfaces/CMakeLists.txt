@@ -34,6 +34,7 @@ set(msg_files
   "msg/GameInfo.msg"
   "msg/SentryInfoOffline.msg"
   "msg/SentryInfoOnline.msg"
+  "msg/RmulStatus.msg"
 )
 
 # set(srv_files

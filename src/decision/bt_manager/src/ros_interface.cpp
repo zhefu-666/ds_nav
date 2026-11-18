@@ -16,6 +16,16 @@ namespace Sentry_BT {
 ros_interface::ros_interface(std::shared_ptr<Blackboard> & blackboard_ptr)
 : Node("ros_interface_bt", rclcpp::NodeOptions()), blackboard_(blackboard_ptr)
 {
+  if (this->declare_parameter<bool>("rmul_status_only", false)) {
+    blackboard_->set<RmulStatusSnapshot>("rmul_status_snapshot", RmulStatusSnapshot{});
+    rmul_status_sub = this->create_subscription<ros_interfaces::msg::RmulStatus>(
+      "/sentry/rmul_status", 1, [this](ros_interfaces::msg::RmulStatus::ConstSharedPtr msg) {
+        rmulStatusCallback(*msg);
+      });
+    RCLCPP_INFO(get_logger(), "RMUL status input active; competition trees are disabled");
+    return;
+  }
+
   auto node_ptr = rclcpp::Node::SharedPtr(this, [](rclcpp::Node *) {
   });
   this->declare_parameter<bool>("publish_area_markers", true);
@@ -172,6 +182,12 @@ ros_interface::ros_interface(std::shared_ptr<Blackboard> & blackboard_ptr)
     bool through = isTroughTunnel(snapshot, tunnel_zone);
     blackboard_->set("through_tunnel", through);
   });
+}
+
+void ros_interface::rmulStatusCallback(const ros_interfaces::msg::RmulStatus & msg)
+{
+  blackboard_->set<RmulStatusSnapshot>(
+    "rmul_status_snapshot", RmulStatusSnapshot{msg, std::chrono::steady_clock::now()});
 }
 
 // 新增：全局信息回调函数

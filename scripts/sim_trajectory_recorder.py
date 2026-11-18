@@ -7,14 +7,17 @@ Duration is wall time so paused simulation cannot leave this process unbounded.
 """
 import argparse
 from collections import Counter, deque
+from contextlib import ExitStack
 import json
 from pathlib import Path
 import time
 import signal
 
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
+from rclpy.signals import SignalHandlerOptions
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
@@ -24,7 +27,8 @@ from livox_ros_driver2.msg import CustomMsg
 from nav_msgs.msg import Odometry
 from ros_gz_interfaces.msg import Contacts
 from ros_interfaces.msg import MpcPositionCommand
-from sensor_msgs.msg import Imu
+from sensor_msgs.msg import Imu, JointState
+from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 
 from sim_trajectory_evaluate import compose
@@ -44,10 +48,16 @@ class Recorder(Node):
         super().__init__('sim_trajectory_recorder',
                          parameter_overrides=[Parameter('use_sim_time', value=True)])
         self.stream, self.mode, self.tf_wait = stream, mode, tf_wait
+        model = json.loads((Path(get_package_share_directory('huananhu_sim_resources')) / 'config/model.json').read_text())
+        wheel_joints = {wheel['joint'] for wheel in model['wheels']}
+        self.recorded_joints = {joint['name'] for joint in model['joints']
+                                if joint['type'] != 'fixed' and joint['name'] not in wheel_joints}
         self.counts, self.pending = Counter(), deque()
+        self.last_receipts = {}
+        self.contact_complete = False
         self.buffer = Buffer(cache_time=Duration(seconds=120))
         self.listener = TransformListener(self.buffer, self)
-        self.write({'kind':'metadata', 'version':1, 'mode':mode,
+        self.metadata = {'kind':'metadata', 'version':1, 'mode':mode,
                     'duration_clock':'wall', 'pose_stamp_clock':'simulation',
                     'truth_topic':'/sim/ground_truth_odometry', 'truth_pose_origin':'chassis',
                     'truth_to_base_translation_chassis_m':[0.,0.,-.10],
@@ -55,21 +65,43 @@ class Recorder(Node):
                     'prior_frame_contract':'map equals world; TF queried at each estimate measurement stamp',
                     'mapping_frame_contract':'camera_init local gauge; fixed initial SE3 alignment offline only',
                     'saved_local_frame_contract':'estimate transformed into saved-local map at stamp; fixed initial SE3 alignment offline only',
-                    'truth_used_for_control':False, 'tf_wait_wall_s':tf_wait})
+                    'truth_used_for_control':False, 'tf_wait_wall_s':tf_wait}
+        self.write(self.metadata.copy())
         self.create_subscription(Odometry, '/sim/ground_truth_odometry', self.truth, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/sim/base_odom', self.estimate, qos_profile_sensor_data)
         self.create_subscription(CustomMsg, '/livox/lidar', self.lidar, qos_profile_sensor_data)
         self.create_subscription(Imu, '/livox/imu', self.imu, qos_profile_sensor_data)
+        self.create_subscription(JointState, '/joint_states', self.joints, qos_profile_sensor_data)
         self.create_subscription(Twist, '/sim/actuator_cmd_vel', self.command, qos_profile_sensor_data)
         self.create_subscription(Contacts, '/assessment/body_contacts', self.contact, qos_profile_sensor_data)
+        self.create_subscription(String, '/assessment/body_contact_status', self.contact_status, qos_profile_sensor_data)
         self.create_subscription(MpcPositionCommand, '/opt_path', self.opt_path, qos_profile_sensor_data)
 
     def write(self, row):
         row.setdefault('receipt_wall_monotonic_s', time.monotonic())
         self.stream.write(json.dumps(row, allow_nan=False)+'\n')
         self.counts[row['kind']] += 1
+        self.last_receipts[row['kind']] = row['receipt_wall_monotonic_s']
+        if row['kind'] == 'contact_status':
+            self.contact_complete = row.get('complete') is True
         if sum(self.counts.values()) % 100 == 0:
             self.stream.flush()
+
+    def capture_ready(self, now):
+        kinds = ('truth', 'command', 'contact_status', 'joint')
+        return self.contact_complete and all(self.counts[kind] >= 2 and
+            0 <= now-self.last_receipts.get(kind, -1e9) <= .5 for kind in kinds)
+
+    def start_capture(self, stream, preflight_path):
+        self.flush_pending(force=True)
+        self.write({'kind':'footer', 'reason':'preflight_complete', 'counts':dict(self.counts)})
+        self.stream.flush()
+        self.stream = stream
+        self.counts = Counter()
+        header = dict(self.metadata, preflight_file=preflight_path,
+                      capture_protocol='fresh_streams_before_mission')
+        self.write(header)
+        self.stream.flush()
 
     def truth(self, msg):
         self.write({'kind':'truth', 'stamp_ns':stamp_ns(msg.header.stamp),
@@ -138,6 +170,17 @@ class Recorder(Node):
                     'contacts':len(msg.contacts),
                     'pairs':[[c.collision1.name,c.collision2.name] for c in msg.contacts]})
 
+    def joints(self, msg):
+        self.write({'kind':'joint', 'stamp_ns':stamp_ns(msg.header.stamp),
+                    'joints':{name:value for name,value in zip(msg.name, msg.position)
+                              if name in self.recorded_joints}})
+
+    def contact_status(self, msg):
+        payload = json.loads(msg.data)
+        self.write({'kind':'contact_status', 'stamp_ns':payload['stamp_ns'],
+                    'contacts':payload['contacts'], 'complete':payload['complete'],
+                    'sensors':payload['sensors'], 'expected_sensors':payload['expected_sensors']})
+
     def opt_path(self, msg):
         self.write({'kind':'opt_path', 'stamp_ns':stamp_ns(msg.header.stamp),
                     'frame':msg.header.frame_id, 'command_count':len(msg.cmds),
@@ -150,25 +193,53 @@ def main():
     parser.add_argument('--duration', type=float, required=True, help='maximum wall seconds')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--tf-wait', type=float, default=2., help='wall seconds to await exact-stamp TF')
+    parser.add_argument('--warmup-seconds', type=float, default=0., help='retain preflight separately before formal capture')
+    parser.add_argument('--ready-file', type=Path, help='exclusive readiness sidecar for the owning fixture')
     args = parser.parse_args()
     if not 0 < args.duration <= 86400 or not 0 < args.tf_wait <= 30:
         parser.error('duration in (0,86400], tf-wait in (0,30] required')
-    if args.out.exists(): parser.error('output exists; choose a new path')
+    if not 0 <= args.warmup_seconds <= 10:
+        parser.error('warmup-seconds in [0,10] required')
+    preflight = args.out.with_name(args.out.stem+'.preflight.jsonl')
+    for path in [args.out, args.ready_file, preflight if args.warmup_seconds else None]:
+        if path is not None and path.exists():parser.error('output exists; choose a new path')
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    stopping = False
     def terminate(_signal, _frame):
-        raise KeyboardInterrupt
-    rclpy.init()
+        nonlocal stopping
+        stopping = True
+    # Do not raise asynchronously inside rclpy's C++ message conversion. Finish
+    # the current bounded spin, then write the footer and shut down normally.
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    signal.signal(signal.SIGINT, terminate)
     signal.signal(signal.SIGTERM, terminate)
-    with args.out.open('x') as stream:
+    with ExitStack() as stack:
+        stream = stack.enter_context((preflight if args.warmup_seconds else args.out).open('x'))
         node = Recorder(stream, args.mode, args.tf_wait)
+        capturing = not args.warmup_seconds
         started = time.monotonic()
         reason = 'duration_reached'
         try:
-            while rclpy.ok() and time.monotonic()-started < args.duration:
+            while not stopping and rclpy.ok() and time.monotonic()-started < args.duration:
                 rclpy.spin_once(node, timeout_sec=.05)
                 node.flush_pending()
+                if not capturing:
+                    elapsed = time.monotonic()-started
+                    if elapsed >= args.warmup_seconds and node.capture_ready(time.monotonic()):
+                        node.start_capture(stack.enter_context(args.out.open('x')), str(preflight.resolve()))
+                        capturing = True
+                        if args.ready_file:
+                            with args.ready_file.open('x') as ready:
+                                json.dump({'ready':True,'preflight_file':str(preflight.resolve())},ready)
+                    elif elapsed > 30:
+                        raise RuntimeError('recording_streams_not_ready')
+            if stopping:
+                reason = 'interrupted'
         except (KeyboardInterrupt, ExternalShutdownException):
             reason = 'interrupted'
+        except Exception:
+            reason = 'error'
+            raise
         finally:
             node.flush_pending(force=True)
             node.write({'kind':'footer', 'reason':reason,

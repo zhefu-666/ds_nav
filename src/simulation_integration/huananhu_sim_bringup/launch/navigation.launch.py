@@ -4,13 +4,17 @@ Requires estimator TF and /sim/base_odom before activation. The parent simulatio
 launch owns map->camera_init and the gated global-to-body command adapter.
 """
 from pathlib import Path
+import os
+import sys
 import tempfile
+import xml.etree.ElementTree as ET
 
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler
-from launch.event_handlers import OnShutdown
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, ExecuteProcess, EmitEvent
+from launch.event_handlers import OnShutdown, OnProcessExit
+from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -51,9 +55,41 @@ def _setup(context):
 
     def cleanup(_context):
         runtime_path.unlink(missing_ok=True)
+        profile_path.unlink(missing_ok=True)
         return []
 
-    common = {'output': 'screen', 'parameters': [str(runtime_path)]}
+    lifecycle_nodes = ['planner_server', 'controller_server', 'bt_navigator', 'waypoint_follower']
+    if mode == 'prior':
+        lifecycle_nodes.insert(0, 'map_server')
+    # Humble Fast DDS waits only 100 ms for the service response reader to
+    # match. Under rendering/sensor load the transition can finish but its
+    # response is discarded, leaving Nav2 1.1's caller waiting indefinitely.
+    # Scope the larger discovery allowance to these lifecycle reply writers;
+    # sensor/command QoS and the official lifecycle manager remain unchanged.
+    existing_profile = os.environ.get('FASTRTPS_DEFAULT_PROFILES_FILE')
+    namespace = 'http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles'
+    ET.register_namespace('', namespace)
+    tag = lambda name: '{' + namespace + '}' + name
+    root = ET.parse(existing_profile).getroot() if existing_profile else ET.Element(tag('profiles'))
+    profiles = root if root.tag == tag('profiles') else root.find(tag('profiles'))
+    if profiles is None:
+        raise ValueError('DDS XML has no profiles element')
+    for name in lifecycle_nodes:
+        profile_name = 'rr/' + name + '/change_stateReply'
+        for old in list(profiles):
+            if old.get('profile_name') == profile_name:
+                profiles.remove(old)
+        writer = ET.SubElement(profiles, tag('publisher'), profile_name=profile_name)
+        reliability = ET.SubElement(ET.SubElement(writer, tag('qos')), tag('reliability'))
+        ET.SubElement(reliability, tag('kind')).text = 'RELIABLE'
+        duration = ET.SubElement(reliability, tag('max_blocking_time'))
+        ET.SubElement(duration, tag('sec')).text = '2'
+        ET.SubElement(duration, tag('nanosec')).text = '0'
+    with tempfile.NamedTemporaryFile(prefix='huananhu_nav_dds_', suffix='.xml', delete=False) as stream:
+        profile_path = Path(stream.name)
+        stream.write(ET.tostring(root, encoding='utf-8', xml_declaration=True))
+    common = {'output': 'screen', 'parameters': [str(runtime_path)],
+              'additional_env': {'FASTRTPS_DEFAULT_PROFILES_FILE': str(profile_path)}}
     actions = [RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)]))]
     actions.extend([
         Node(package='huananhu_sim_bringup', executable='simulation_planner_server',
@@ -66,10 +102,8 @@ def _setup(context):
         Node(package='nav2_waypoint_follower', executable='waypoint_follower',
              name='waypoint_follower', **common),
     ])
-    lifecycle_nodes = ['planner_server', 'controller_server', 'bt_navigator', 'waypoint_follower']
     if mode == 'prior':
         actions.append(Node(package='nav2_map_server', executable='map_server', name='map_server', **common))
-        lifecycle_nodes.insert(0, 'map_server')
     autostart = LaunchConfiguration('nav_autostart').perform(context).lower()
     if autostart not in ('true', 'false'):
         raise ValueError('nav_autostart must be true or false')
@@ -77,6 +111,15 @@ def _setup(context):
                         name='lifecycle_manager_sim_navigation', output='screen',
                         parameters=[{'use_sim_time': True, 'autostart': autostart == 'true',
                                      'node_names': lifecycle_nodes}]))
+    if autostart == 'true':
+        watchdog = ExecuteProcess(cmd=[sys.executable, str(share / 'runtime/navigation_startup_watchdog.py')],
+                                  output='screen')
+        def check_startup(event, _context):
+            if event.returncode and not _context.is_shutdown:
+                return [EmitEvent(event=Shutdown(reason='Navigation lifecycle startup failed'))]
+            return []
+        actions.extend([RegisterEventHandler(OnProcessExit(target_action=watchdog, on_exit=check_startup)),
+                        watchdog])
     return actions
 
 

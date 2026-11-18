@@ -116,8 +116,10 @@ public:
         integral[i] =
             std::max(-integralLimit, std::min(integralLimit, integral[i] + error * dt));
       }
+      // Zero-input braking uses the measured hub velocity with the same
+      // torque cap; ordinary moving PI gains remain unchanged.
       double torque = std::max(
-          -maxTorque, std::min(maxTorque, kp * error + ki * integral[i]));
+          -maxTorque, std::min(maxTorque, (stopRequested ? 3.0 * kp : kp) * error + ki * integral[i]));
       auto f = ecm.Component<components::JointForceCmd>(joints[i]);
       if (!f)
         ecm.CreateComponent(joints[i], components::JointForceCmd({torque}));

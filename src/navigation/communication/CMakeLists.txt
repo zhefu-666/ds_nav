@@ -69,6 +69,9 @@ add_executable(${PROJECT_NAME}
 )
 target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_core )
 
+add_executable(basic_nav_serial src/basic_nav_serial.cpp)
+ament_target_dependencies(basic_nav_serial rclcpp geometry_msgs ros_interfaces)
+
 # If requested, add COM_DEBUG definition to targets so '#ifdef COM_DEBUG' blocks are enabled
 if(COM_DEBUG)
   message(STATUS "COM debug enabled: adding COM_DEBUG define to targets")
@@ -82,7 +85,7 @@ endif()
 
 # Mark executables and/or libraries for installation
 install(
-  TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_core
+  TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_core basic_nav_serial
   DESTINATION lib/${PROJECT_NAME}
 )
 install(

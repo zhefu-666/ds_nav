@@ -1,0 +1,12 @@
+uint8 sequence
+uint8 game_type
+uint16 stage_remain_s
+uint8 game_progress
+uint16 current_hp
+uint16 maximum_hp
+uint8 robot_id
+bool chassis_power_enabled
+uint16 zone_state_and_rfid
+uint16 ally_control_degree
+uint16 enemy_control_degree
+uint8 lifter_position

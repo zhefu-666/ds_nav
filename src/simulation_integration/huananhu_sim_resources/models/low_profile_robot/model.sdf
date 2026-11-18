@@ -89,10 +89,11 @@
               <max_angle>3.14159265</max_angle>
             </horizontal>
             <vertical>
-              <samples>16</samples>
+              <!-- MID-360 vertical FOV; regular rays approximate its scan pattern. -->
+              <samples>32</samples>
               <resolution>1</resolution>
-              <min_angle>-.610865</min_angle>
-              <max_angle>.610865</max_angle>
+              <min_angle>-0.12217304764</min_angle>
+              <max_angle>0.90757121104</max_angle>
             </vertical>
           </scan>
           <range>

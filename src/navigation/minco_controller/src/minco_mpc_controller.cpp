@@ -740,6 +740,19 @@ geometry_msgs::msg::TwistStamped MincoMpcController::computeVelocityCommands(
       }
     }
 
+    // Nav2 provides the query in the local costmap frame, while setPlan may
+    // retain a map-frame goal. Compare both poses at the query's TF timestamp.
+    if (has_goal_pose && goal_pose.header.frame_id != pose.header.frame_id) {
+      if (!tf_ || goal_pose.header.frame_id.empty() || pose.header.frame_id.empty()) {
+        return finish(cmd, false, "GOAL_TF_UNAVAILABLE");
+      }
+      try {
+        goal_pose.header.stamp = pose.header.stamp;
+        goal_pose = tf_->transform(goal_pose, pose.header.frame_id);
+      } catch (const tf2::TransformException &) {
+        return finish(cmd, false, "GOAL_TF_UNAVAILABLE");
+      }
+    }
     if (has_goal_pose && goal_checker->isGoalReached(pose.pose, goal_pose.pose, velocity)) {
       std::lock_guard<std::mutex> lk(data_mtx_);
       has_tracked_ref_ = false;

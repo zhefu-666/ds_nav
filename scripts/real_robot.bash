@@ -5,7 +5,7 @@ mode="${1:-}"
 if [[ "$mode" != mapping && "$mode" != navigation ]]; then
   echo 'Usage: bash scripts/real_robot.bash mapping|navigation'
   echo 'Environment: USE_RVIZ=false, NAV_PARAMS, NAV_MAP, GICP_CONFIG, FILTER_CONFIG'
-  echo 'Sensor/LIO must already be running. This entry does not start chassis communication.'
+  echo 'Sensor/LIO must already be running. Optional navigation: NAV_SERIAL=rmul_v1, NAV_SERIAL_PORT=/dev/ttyACM0'
   exit 2
 fi
 workspace="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,6 +23,17 @@ for config_env in NAV_PARAMS NAV_MAP GICP_CONFIG FILTER_CONFIG; do
   fi
 done
 case "${USE_RVIZ:-false}" in true|false) ;; *) echo 'USE_RVIZ must be true or false.' >&2; exit 2 ;; esac
+serial_mode="${NAV_SERIAL:-off}"
+case "$serial_mode" in
+  off) ;;
+  rmul_v1)
+    if [[ "$mode" != navigation ]]; then
+      echo 'NAV_SERIAL=rmul_v1 is only available in navigation mode.' >&2
+      exit 2
+    fi
+    ;;
+  *) echo 'NAV_SERIAL must be off or rmul_v1.' >&2; exit 2 ;;
+esac
 command -v tmux >/dev/null || { echo 'tmux is required.' >&2; exit 1; }
 # Resolve installed resources before starting any processes.
 packages=(navi2 point_lio livox_ros_driver2 rviz2 tf2_ros)
@@ -38,6 +49,9 @@ else
              nav2_velocity_smoother nav2_lifecycle_manager spatio_temporal_voxel_layer)
   resources+=(params/sentry1.yaml config/our.rviz)
 fi
+if [[ "$serial_mode" == rmul_v1 ]]; then
+  packages+=(communication)
+fi
 for package in "${packages[@]}"; do
   ros2 pkg prefix "$package" >/dev/null || {
     echo "Missing installed ROS package: $package" >&2; exit 1;
@@ -50,6 +64,14 @@ for resource in "${resources[@]}"; do
     exit 1
   }
 done
+if [[ "$serial_mode" == rmul_v1 ]]; then
+  comm_prefix="$(ros2 pkg prefix communication)"
+  if [[ ! -r "$comm_prefix/share/communication/launch/basic_nav_serial.launch.py" ||
+        ! -x "$comm_prefix/lib/communication/basic_nav_serial" ]]; then
+    echo 'Missing installed RMUL serial launch or executable.' >&2
+    exit 1
+  fi
+fi
 session=ds_nav_real
 # One session for both modes prevents this entry from starting duplicate map TF publishers.
 if tmux has-session -t "$session" 2>/dev/null; then
@@ -60,6 +82,11 @@ fi
 nodes="$(timeout 10s ros2 node list)" || exit 1
 if [[ "$nodes" == *slam_toolbox* || "$nodes" == *gicp_relocalization_node* || "$nodes" == *map_server* ]]; then
   echo 'Existing mapping/localization nodes detected. Inspect and stop the old mode first.' >&2
+  exit 1
+fi
+if [[ "$serial_mode" == rmul_v1 ]] &&
+   [[ "$nodes" == *communication_sentry* || "$nodes" == *basic_nav_serial* ]]; then
+  echo 'A chassis communication node is already running. Stop it before selecting RMUL V1.' >&2
   exit 1
 fi
 if [[ "$nodes" != *livox_pointlio_container* ]]; then
@@ -104,6 +131,10 @@ else
   start_window localization "${gicp[@]}"
   start_window cloud_filter "${filter[@]}"
   start_window navigation "${nav[@]}"
+  if [[ "$serial_mode" == rmul_v1 ]]; then
+    start_window communication ros2 launch communication basic_nav_serial.launch.py \
+      rmul_v1:=true "port:=${NAV_SERIAL_PORT:-/dev/ttyACM0}"
+  fi
 fi
 echo "Started $mode. Inspect every window: tmux attach -t $session"
 echo 'This is process startup only; verify localization and fresh inputs before sending goals.'

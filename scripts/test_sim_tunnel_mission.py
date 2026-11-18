@@ -202,3 +202,76 @@ def test_portal_initial_lio_bootstrap_when_wall_precedes_first_longitudinal_fix(
     node.x_anchor=None
     with patch.object(Passage,'pose',side_effect=[ValueError('end_wall_not_observable'),([.8,-2.53,.08],'rotation',1.)]):
         with pytest.raises(ValueError):node.pose()
+
+@pytest.mark.parametrize('responses,attempts,cancelled,expected_calls,success',[
+    (['ready'],2,False,1,True),
+    ([None,'ready'],2,False,2,True),
+    ([None,None],2,False,2,False),
+    ([None,'ready'],1,False,1,False),
+    ([None,'ready'],2,True,1,False),
+])
+def test_relocalization_read_retry_is_bounded_and_cleans_timed_out_future(
+        responses,attempts,cancelled,expected_calls,success):
+    import ast
+    import inspect
+    from concurrent.futures import Future
+    from sim_tunnel_mission import relocalize
+    tree=ast.parse(inspect.getsource(relocalize))
+    function=next(n for n in tree.body[0].body if isinstance(n,ast.FunctionDef) and n.name=='call')
+    class Client:
+        srv_name='/gicp_relocalization_node/get_parameters'
+        def __init__(self):self.sent=[];self.removed=[]
+        def service_is_ready(self):return True
+        def call_async(self,request):
+            future=Future();value=responses[len(self.sent)];self.sent.append(future)
+            if value is not None:future.set_result(value)
+            return future
+        def remove_pending_request(self,future):self.removed.append(future)
+    client=Client();report={};budgets=[]
+    def wait(predicate,budget):budgets.append(budget);return predicate()
+    namespace=dict(wait=wait,stopping=lambda:cancelled,report=report)
+    exec(compile(ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[])),
+                 'relocalization_call','exec'),namespace)
+    if success:assert namespace['call'](client,object(),attempts=attempts)=='ready'
+    else:
+        with pytest.raises(ValueError,match='relocalization_service_timeout'):
+            namespace['call'](client,object(),attempts=attempts)
+    assert len(client.sent)==expected_calls
+    assert all(f.cancelled() for f in client.removed)
+    assert len(report.get('service_timeouts',[]))==len(client.removed)
+    assert all(b==10 for b in budgets)
+    # Only the initial read opts into retry; parameter writes and recall keep
+    # the one-attempt default even when their response is lost.
+    retry_calls=[n for n in ast.walk(tree) if isinstance(n,ast.Call)
+                 and isinstance(n.func,ast.Name) and n.func.id=='call' and n.keywords]
+    assert len(retry_calls)==1 and retry_calls[0].args[0].id=='get'
+    assert ast.literal_eval(retry_calls[0].keywords[0].value)==2
+
+
+@pytest.mark.parametrize('report,rejected',[
+    ({'completed':True,'disabled_confirmed':True},False),
+    ({'completed':True,'disabled_confirmed':False},True),
+    ({'completed':True},True),
+    ({'completed':False,'disabled_confirmed':True},True),
+])
+def test_mission_rejects_success_exit_without_passage_stop_evidence(tmp_path,report,rejected):
+    """Exercise the actual mission child runner despite a nominal zero exit."""
+    import ast,json,sys
+    from pathlib import Path
+    from types import SimpleNamespace
+    import sim_tunnel_mission as mission
+    source=ast.parse(Path(mission.__file__).read_text())
+    main=next(n for n in source.body if isinstance(n,ast.FunctionDef) and n.name=='main')
+    run=next(n for n in main.body if isinstance(n,ast.FunctionDef) and n.name=='run')
+    wrapper=ast.parse("def wrapper():\n child=None\n").body[0]
+    wrapper.body.extend([run,ast.parse("run('passage', [])").body[0]])
+    module=ast.fix_missing_locations(ast.Module(body=[wrapper],type_ignores=[]))
+    child=SimpleNamespace(poll=lambda:0,wait=lambda timeout:0)
+    (tmp_path/'passage.json').write_text(json.dumps(report))
+    ns=dict(args=SimpleNamespace(out=tmp_path),result={'stages':[]},sys=sys,
+            subprocess=SimpleNamespace(Popen=lambda *a,**kw:child,STDOUT=-2),ROOT=tmp_path,
+            stopping=lambda:False,json=json)
+    exec(compile(module,'<mission child runner>','exec'),ns)
+    if rejected:
+        with pytest.raises(ValueError,match='passage_stop_not_confirmed'):ns['wrapper']()
+    else:ns['wrapper']()

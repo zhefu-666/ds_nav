@@ -117,3 +117,10 @@
   gz_type_name: ignition.msgs.Double
   ros_topic_name: /huananhu/position/gas_2_slide
   ros_type_name: std_msgs/msg/Float64
+
+# Assessment heartbeat, independent of the existing event-only safety topic.
+- direction: GZ_TO_ROS
+  gz_topic_name: /assessment/body_contact_status
+  gz_type_name: ignition.msgs.StringMsg
+  ros_topic_name: /assessment/body_contact_status
+  ros_type_name: std_msgs/msg/String

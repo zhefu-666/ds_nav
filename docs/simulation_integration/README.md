@@ -10,6 +10,21 @@
 
 归档实验脚本含旧工作空间绝对路径，仅用于查阅和恢复复现；不要直接从归档目录运行旧队列。若要重现，应先按manifest恢复所需文件与依赖，使用新输出目录并检查脚本路径。正常启动和scripts中的通用工具仍在项目内；`check_sim_clearance.py`运行时可重新创建其默认输出目录，这不代表旧产物未清理。
 
+## 2026-11-12 可靠性修复说明
+
+历史套件结论保留如下；当前源码新增了独立接触状态与证据门槛、监督器后代清理，以及隧道预测约束启用边界修补。**历史450文件哈希一致的核对结论只适用于此前核对时点，不能视为当前修补版验收。** 本轮状态NEEDS_FIX，详见[修复记录](../ai_refactor_records/20261112_simulation_reliability_closure.md)。
+
+新运行必须保存监督器退出报告：`python3 scripts/sim_supervisor.py --shutdown-report NEW_RUN/shutdown.json -- COMMAND ...`。仅从新实例取得周期`/assessment/body_contact_status`和实测关节，禁止对旧记录补造心跳。
+
+结束并清理实例后，使用新的显式输出路径复评：
+
+```bash
+python3 scripts/sim_stop_assess.py NEW_RUN --out NEW_RUN/stop_assessment_v2.json
+python3 scripts/sim_mission_assess.py NEW_RUN --out NEW_RUN/mission_assessment_v2.json
+```
+
+前者用于洞内取消/Point-LIO退出，后者用于完整任务；均合并接触、连续性与退出门槛。阈值保持原准入；输出存在时拒绝覆盖。构建与运行需遵守本仓库授权规则。
+
 ## 1. 当前完成情况
 
 **已知地图、两处已知隧道、显式任务入口下，9项主场景和2项额外冷启动复验已经全部通过。** 这不代表所有仿真能力、所有故障模式或实车已经验收。
@@ -34,7 +49,7 @@
 
 五次穿行的最小真实顶部/侧向余量：西侧4.58/12.73mm，东侧4.51/10.87mm。它们是完整CAD包络在独立评估采样中的结果，不应以名义车高240mm替代。
 
-本次核对主套件锁定的450个源码/资源文件，内容哈希与当前文件全部一致；没有发现匹配验收队列或Gazebo启动命令的运行进程。这是本次进程快照，不是永久运行保证。
+历史核对时，主套件锁定的450个源码/资源文件与当时工作区哈希一致。2026-11-12修复已经改变部分文件，当前源码需使用本轮独立证据验收；历史无运行进程的快照也不代表当前进程状态。
 
 ### 仍有边界与问题
 
@@ -256,6 +271,22 @@ ros2 param get /controller_server general_goal_checker.yaw_goal_tolerance
 
 话题频率受RTF和观察工具调度影响；区分仿真时间频率与墙钟接收速率。大点云和odom有best-effort/latest-state QoS，发现“无消息”时先检查QoS和domain，不要先改频率。
 
+### 三维雷达与原始点云视图（2026-11-15）
+
+仿真雷达采用通用 `gpu_lidar`：水平360个采样、垂直32层，传感器局部视场为−7°到52°。
+这与Dust项目的垂直配置一致，但保留当前安装姿态、40 Hz微扫描与Livox CustomMsg接口；
+不是MID-360真实非重复扫描模式，也没有复制Dust的1875个水平采样和倒装姿态。
+垂直层数增加后每次采样的射线槽数为11520，是旧配置的两倍，性能需独立评估。
+
+`rviz:=true` 默认打开导航视图 `sim.rviz`，同时提供原始和注册点云显示；原始点云在该视图中仍依赖TF连通。
+仅检查传感器时可选择 `rviz:=true rviz_config:=raw_lidar.rviz`，其固定坐标系为 `navigation_laser`，
+直接显示 `/lidar/points`，不依赖Point-LIO或全局定位；该视图不提供导航目标/初始位姿工具。
+它显示的是当前扫描，不能作为累计建图或PCD保存成功的证据。
+
+当前场景有效先验表面高度约0.08到0.50米，因此点云看起来较扁并不等于雷达二维化。
+安装姿态、遮挡、有效回波和场景高度需要共同判断。原始点云、Livox转换和注册点云的
+静止链路证据见 `artifacts/dust_lidar_sync_20261115/probe.json`；本次未运行导航或完整建图验收。
+
 | 话题 | 作用 |
 |---|---|
 | `/clock` | 仿真时钟 |
@@ -385,5 +416,9 @@ src/navigation/minco_controller/    MPC及/opt_path消费
 | 无显示或LiDAR异常 | headless仍需渲染；核对包内Ogre库/哈希、模型可视网格、自遮挡及40Hz批次时序 |
 | 提示domain被占用 | 检查对应PID、命令和partition；只停止本次拥有的实例，不绕过文件锁 |
 | 退出有SIGTERM/SIGKILL升级 | 保留日志并检查残留进程、最终零命令；不要把任务PASS写成优雅退出PASS |
+
+可靠性夹具可对记录器传入`--warmup-seconds 3 --ready-file <新路径>`，等待真值、执行命令、接触状态及关节流新鲜后再开始任务。预热原始记录单独保留为`*.preflight.jsonl`，正式段连续性门槛仍为150ms；不能据此裁剪历史失败或重评为PASS。夹具必须等待ready文件并确认记录器仍存活。
+
+2026-11-13复验：west_alignment_12五次完整任务及15个后续导航目标独立通过，east_alignment_11仍因纵向桥接耗尽只完成两次。east_cancel_13零命令后发生横向余移接触，整体失败；不能仅以最终低速或disabled认定安全取消。east_odom_failure_14停车独立通过。详见PROJECT_STATUS及可靠性改造记录，旧原始失败均保留。自遮挡批量查询不改几何容差、射线掩码或每帧关节反馈，不能用离线性能改善替代真实连续性验收。
 
 本仓库禁止未经明确授权构建，也禁止Agent暂存、提交、推送、合并或覆盖已有工作区修改。本README只提供现有overlay的使用与只读调试方式。

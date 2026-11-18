@@ -76,6 +76,27 @@ def closest_triangle_points(triangles, points):
     return np.sqrt(best)
 
 
+def triangle_bounds_tree(triangles):
+    """Exact AABB hierarchy; every triangle belongs to one leaf."""
+    lower, upper = triangles.min(1), triangles.max(1)
+    centers = (lower + upper) * .5
+    nodes = []
+    def split(ids):
+        index = len(nodes)
+        nodes.append(None)
+        lo, hi = lower[ids].min(0), upper[ids].max(0)
+        if len(ids) <= 32:
+            nodes[index] = (lo, hi, ids, None)
+        else:
+            axis = np.ptp(centers[ids], axis=0).argmax()
+            ordered = ids[np.argsort(centers[ids, axis])]
+            middle = len(ids) // 2
+            nodes[index] = (lo, hi, split(ordered[:middle]), split(ordered[middle:]))
+        return index
+    split(np.arange(len(triangles)))
+    return nodes
+
+
 class CadSelfFilter:
     def __init__(self, resource_dir, tolerance=.001, geometry="visual_surface"):
         if tolerance <= 0 or tolerance > .005:
@@ -124,6 +145,7 @@ class CadSelfFilter:
         self.visuals = {}
         self.visual_trees = {}
         self.visual_bounds = {}
+        self.visual_bvh = {}
         if geometry == 'visual_surface':
             mesh_cache = {}
             for link in root.findall('link'):
@@ -150,6 +172,7 @@ class CadSelfFilter:
                     triangles=np.concatenate(parts)
                     self.visuals[name]=(triangles,cKDTree(triangles.mean(1)),triangles.min((0,1)),triangles.max((0,1)))
                     self.visual_bounds[name] = (triangles.min(1), triangles.max(1))
+                    self.visual_bvh[name] = triangle_bounds_tree(triangles)
                     radius = np.linalg.norm(triangles-triangles.mean(1)[:,None,:],axis=2).max(axis=1)
                     bins = np.ceil(np.log2(np.maximum(radius,1e-12))).astype(int)
                     self.visual_trees[name] = []
@@ -201,44 +224,41 @@ class CadSelfFilter:
                         keep=np.ones(len(candidates),dtype=bool)
                         keep[np.flatnonzero(cached_mask)[distance<=self.tolerance]]=False
                         candidates=candidates[keep]
-                # Candidate method is conservative: missed triangles retain
-                # points; only exact surface-proximity positives are removed.
-                for chunk in np.array_split(candidates,max(1,math.ceil(len(candidates)/64))):
-                    if len(chunk):
-                        k=min(128,len(triangles))
-                        _,ids=tree.query(local[chunk],k=k)
-                        ids=np.asarray(ids).reshape(-1,k)
-                        distance=closest_triangle_points(triangles[ids.reshape(-1)],np.repeat(local[chunk],k,axis=0)).reshape(-1,k)
-                        nearest=distance.argmin(axis=1)
-                        positive=distance[np.arange(len(chunk)),nearest]<=self.tolerance
-                        found.extend(chunk[positive])
+                # A point within the surface band must lie in the expanded
+                # triangle AABB. Traverse exact boxes instead of a centroid
+                # shortlist plus large bounding-sphere fallback candidate sets.
+                matched = np.zeros(len(xyz), dtype=bool)
+                stack = [(0, candidates)] if len(candidates) else []
+                nodes = self.visual_bvh[link]
+                lower, upper = self.visual_bounds[link]
+                while stack:
+                    node_id, indices = stack.pop()
+                    lo_node, hi_node, left, right = nodes[node_id]
+                    indices = indices[~matched[indices]]
+                    inside = np.all((local[indices] >= lo_node-self.tolerance) &
+                                    (local[indices] <= hi_node+self.tolerance), axis=1)
+                    indices = indices[inside]
+                    if not len(indices):
+                        continue
+                    if right is not None:
+                        stack.extend(((left, indices), (right, indices)))
+                        continue
+                    for chunk in np.array_split(indices, max(1, math.ceil(len(indices)/64))):
+                        points = local[chunk, None, :]
+                        in_box = np.all((points >= lower[left]-self.tolerance) &
+                                        (points <= upper[left]+self.tolerance), axis=2)
+                        rows, columns = np.nonzero(in_box)
+                        if not len(rows):
+                            continue
+                        ids = left[columns]
+                        distance = closest_triangle_points(triangles[ids], local[chunk[rows]])
+                        positive = distance <= self.tolerance
+                        confirmed = chunk[rows[positive]]
+                        matched[confirmed] = True
                         if cache is not None:
-                            for index,triangle in zip(chunk[positive],ids[np.arange(len(chunk)),nearest][positive]):
-                                cache[int(ray_ids[index])]=int(triangle)
-                        # A long face can contain the hit while its centroid is
-                        # outside the nearest 128. A bounding-sphere fallback is
-                        # complete; removal still requires exact surface distance.
-                        for index in chunk[~positive]:
-                            candidates_ids = []
-                            for radius, triangle_ids, sphere_tree in self.visual_trees[link]:
-                                selected = sphere_tree.query_ball_point(local[index], radius+self.tolerance)
-                                candidates_ids.extend(triangle_ids[selected])
-                            if not candidates_ids:
-                                continue
-                            ids_array = np.asarray(candidates_ids, dtype=np.int64)
-                            lower, upper = self.visual_bounds[link]
-                            in_box = np.all((local[index] >= lower[ids_array]-self.tolerance) &
-                                            (local[index] <= upper[ids_array]+self.tolerance), axis=1)
-                            candidates_ids = ids_array[in_box]
-                            if len(candidates_ids) == 0:
-                                continue
-                            candidate_distance = closest_triangle_points(
-                                triangles[candidates_ids], np.broadcast_to(local[index], (len(candidates_ids),3)))
-                            best = int(np.argmin(candidate_distance))
-                            if candidate_distance[best] <= self.tolerance:
-                                found.append(index)
-                                if cache is not None:
-                                    cache[int(ray_ids[index])] = candidates_ids[best]
+                            for index, triangle in zip(confirmed, ids[positive]):
+                                cache[int(ray_ids[index])] = int(triangle)
+                found.extend(np.flatnonzero(matched))
                 hits[found]=True;counts[link]=len(found)
             return hits,counts
         for link,(eq,lo,hi) in self.hulls.items():

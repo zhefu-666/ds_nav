@@ -29,9 +29,9 @@ class LidarToLivox(Node):
         super().__init__("sim_lidar_to_livox")
         self.declare_parameter("input_topic", "/lidar/points")
         self.declare_parameter("output_topic", "/livox/lidar")
-        self.declare_parameter("scan_lines", 16)
-        self.declare_parameter("vertical_min_angle", -0.610865)
-        self.declare_parameter("vertical_max_angle", 0.610865)
+        self.declare_parameter("scan_lines", 32)
+        self.declare_parameter("vertical_min_angle", -0.12217304764)
+        self.declare_parameter("vertical_max_angle", 0.90757121104)
 
         self.declare_parameter("sampling_mode", "snapshot")
         self.declare_parameter("micro_batches", 4)
@@ -116,6 +116,9 @@ class LidarToLivox(Node):
             self.reset_scan()
             self.self_log()
             return
+        self.drain_clouds(stamp)
+
+    def drain_clouds(self, stamp):
         while self.cloud_queue:
             cloud = self.cloud_queue[0]
             cloud_stamp = cloud.header.stamp.sec + cloud.header.stamp.nanosec * 1e-9
@@ -140,6 +143,11 @@ class LidarToLivox(Node):
             self.self_counts['dropped'] += 1
             self.reset_scan()
             self.self_log()
+        # Joint messages can already bracket this acquisition when its DDS
+        # callback runs. Do not leave it waiting for another joint callback,
+        # whose queue may itself be delayed by the preceding geometry work.
+        if self.joint_history.samples:
+            self.drain_clouds(self.joint_history.samples[-1][0])
 
     def process_cloud(self, msg: PointCloud2, positions=None):
         fields = {f.name for f in msg.fields}

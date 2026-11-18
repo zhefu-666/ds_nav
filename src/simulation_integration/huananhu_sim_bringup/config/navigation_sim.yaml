@@ -233,7 +233,9 @@ planner_server:
         variant: ''
       rog_map:
         frame_id: camera_init
-        resolution: 0.05
+        # Keep voxel steps below the unchanged 30 mm thin-surface threshold.
+        # A 50 mm step turns tilted flat-floor returns into false obstacles.
+        resolution: 0.025
         inflation_resolution: 0.05
         map_size:
         - 10.0
